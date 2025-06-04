@@ -20,6 +20,8 @@ use Filament\Tables\Table;
 use Illuminate\Support\Number;
 use Filament\Forms\Components\DatePicker;
 
+=======
+
 class StocksRelationManager extends RelationManager
 {
     use HasPurchasingForm, RefreshThePage;
