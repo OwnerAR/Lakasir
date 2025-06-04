@@ -2,6 +2,10 @@ var staticCacheName = "pwa-v" + new Date().getTime();
 
 var filesToCache = [
   '/offline',
+  '/build/assets/app-DcZ1BOUl.css',
+  '/build/assets/app-l0sNRNKZ.js',
+  '/build/assets/theme-CGRx11rq.css',
+  '/css/aymanalhattami/filament-page-with-sidebar/filament-page-with-sidebar.css',
   '/css/app/custom-stylesheet.css',
   '/js/app/custom-javascript.js',
   '/js/app/printer.js',

@@ -21,8 +21,11 @@ export default {
       },
       colors: {
         lakasir: {
-          primary: "#FF6600",
-        }
+          primary: "#0E1389",
+        },
+        primary: {
+            DEFAULT: "0E1389",
+        },
       },
     },
   },
