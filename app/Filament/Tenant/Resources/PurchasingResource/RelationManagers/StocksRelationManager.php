@@ -14,8 +14,12 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\TextInputColumn;
+use Filament\Tables\Columns\DateColumn;
+use Filament\Tables\Columns\DebounceColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Number;
+use Filament\Forms\Components\DatePicker;
+
 
 class StocksRelationManager extends RelationManager
 {
@@ -35,8 +39,10 @@ class StocksRelationManager extends RelationManager
 
     public function form(Form $form): Form
     {
-        return $form->schema($this->get('product'))
-            ->columns(1);
+        return $form->schema([
+            ...$this->get('product')
+        ])
+        ->columns(1);
     }
 
     public function table(Table $table): Table
@@ -72,9 +78,9 @@ class StocksRelationManager extends RelationManager
                         $this->refreshPage();
                     }),
                 TextInputColumn::make('expired')
-                    ->disabled($disabled)
                     ->type('date')
-                    ->translateLabel(),
+                    ->translateLabel()
+                    ->disabled($disabled),
                 TextInputColumn::make('initial_price')
                     ->disabled($disabled)
                     ->type('number')

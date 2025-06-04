@@ -43,6 +43,23 @@ class POS extends Page
         $this->refreshCart();
     }
 
+    public function search($query = '') {
+        $this->menuItems = Product::query()
+            ->where(function ($q) use ($query) {
+                $q->where('name', 'like', '%' . $query . '%')
+                ->orWhere('barcode', 'like', '%' . $query . '%');
+            })
+            ->limit(20)
+            ->get()
+            ->toArray();
+
+        $this->dispatch('refreshPage', [
+            'cartItems' => $this->cartItems,
+            'categories' => $this->categories,
+            'menuItems' => $this->menuItems,
+        ]);
+    }
+
     public function refreshCart()
     {
         $this->cartItems = CartItem::get()->toArray();
