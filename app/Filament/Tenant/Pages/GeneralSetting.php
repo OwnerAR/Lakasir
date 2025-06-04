@@ -44,7 +44,7 @@ class GeneralSetting extends Page implements HasActions, HasForms
 
     public $about = [
         'shop_location' => '',
-        'photo' => '',
+        'photo' => [],
     ];
 
     public $setting = [];
@@ -60,6 +60,8 @@ class GeneralSetting extends Page implements HasActions, HasForms
             $about['preview_image'] = $about['photo'];
             if ($about['photo']) {
                 $about['photo'] = [$about['photo']];
+            } else {
+                $about['photo'] = [];
             }
             foreach (config('setting.key') as $key) {
                 $this->setting[$key] = Setting::get($key);
@@ -88,7 +90,7 @@ class GeneralSetting extends Page implements HasActions, HasForms
             'address' => $profile->address,
             'locale' => $profile->locale,
             'timezone' => $profile->timezone,
-            'photo' => $profile->photo ? [$profile->photo] : null,
+            'photo' => $profile->photo ? [$profile->photo] : [],
         ];
     }
 
@@ -100,7 +102,17 @@ class GeneralSetting extends Page implements HasActions, HasForms
                     Tabs\Tab::make('About')
                         ->statePath('about')
                         ->translateLabel()
-                        ->schema(About::form()),
+                        ->schema(array_merge(
+                            About::form(),
+                            [
+                                Actions::make([
+                                    Action::make('Save')
+                                        ->translateLabel()
+                                        ->requiresConfirmation()
+                                        ->action('saveAbout'),
+                                ]),
+                            ]
+                        )),
                     Tabs\Tab::make('App')
                         ->statePath('setting')
                         ->translateLabel()
@@ -155,7 +167,17 @@ class GeneralSetting extends Page implements HasActions, HasForms
                     Tabs\Tab::make('Profile')
                         ->statePath('profile')
                         ->translateLabel()
-                        ->schema(Profile::form()),
+                        ->schema(array_merge(
+                            Profile::form(),
+                            [
+                                Actions::make([
+                                    Action::make('Save')
+                                        ->translateLabel()
+                                        ->requiresConfirmation()
+                                        ->action('saveProfile'),
+                                ]),
+                            ]
+                        )),
                 ]),
         ]);
     }
@@ -178,9 +200,8 @@ class GeneralSetting extends Page implements HasActions, HasForms
     {
         $this->validate([
             'about.shop_name' => 'required',
+            'about.business_type' => 'required',
             'about.shop_location' => 'required',
-            'about.currency' => 'required',
-            // 'data.photo' => 'required',
         ]);
 
         if (isset($this->about['photo']) && $this->about['photo'] != null && array_values($this->about['photo'])[0] instanceof TemporaryUploadedFile) {
@@ -189,7 +210,7 @@ class GeneralSetting extends Page implements HasActions, HasForms
             $image->storePubliclyAs('public', $image->getFilename());
             $url = optional(Storage::disk('public'))->url($image->getFilename());
             $this->about['photo_url'] = $url;
-            $this->about['photo'] = null;
+            $this->about['photo'] = [];
         }
         $aboutService->createOrUpdate($this->about);
 
@@ -228,7 +249,6 @@ class GeneralSetting extends Page implements HasActions, HasForms
             'profile.timezone' => 'required',
             'profile.locale' => 'required',
             'profile.password' => 'nullable|confirmed',
-            // 'data.photo' => 'required',
         ]);
 
         /** @var User $user */
@@ -242,7 +262,7 @@ class GeneralSetting extends Page implements HasActions, HasForms
                 $image->storePubliclyAs('public', $image->getFilename());
                 $url = optional(Storage::disk('public'))->url($image->getFilename());
                 $this->profile['photo_url'] = $url;
-                $this->profile['photo'] = null;
+                $this->profile['photo'] = [];
             }
         }
 
@@ -286,7 +306,6 @@ class GeneralSetting extends Page implements HasActions, HasForms
                     'photo' => null,
                 ]);
             }
-
         }
 
         Notification::make()

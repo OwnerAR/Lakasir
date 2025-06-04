@@ -63,12 +63,6 @@ class About extends Model
                 })
                 ->imageEditorMode(2)
                 ->translateLabel(),
-            Actions::make([
-                Action::make('Save')
-                    ->translateLabel()
-                    ->requiresConfirmation()
-                    ->action('saveAbout'),
-            ]),
         ];
     }
 }

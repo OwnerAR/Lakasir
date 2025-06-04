@@ -99,12 +99,6 @@ class Profile extends Model
                 ->required()
                 ->visible(fn (Get $get): bool => filled($get('password')))
                 ->dehydrated(false),
-            Actions::make([
-                Action::make('Save')
-                    ->translateLabel()
-                    ->requiresConfirmation()
-                    ->action('saveProfile'),
-            ]),
         ];
     }
 }
