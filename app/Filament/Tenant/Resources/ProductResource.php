@@ -29,6 +29,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Laravel\Pennant\Feature;
+use App\Filament\Tenant\Resources\ProductResource\RelationManagers\StocksRelationManager;
 
 class ProductResource extends Resource
 {
@@ -228,7 +229,7 @@ class ProductResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            StocksRelationManager::class,
         ];
     }
 

@@ -59,6 +59,9 @@ class StocksRelationManager extends RelationManager
                             'product_id' => $this->ownerRecord->id,
                             'is_ready' => true,
                         ]));
+                        $product = $this->ownerRecord;
+                        $product->stock += $data['stock'];
+                        $product->save();
                     })
                     ->createAnother(false),
             ])
