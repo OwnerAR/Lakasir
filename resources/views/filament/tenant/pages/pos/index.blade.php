@@ -43,7 +43,6 @@
               <input
               type="text"
               x-model="searchQuery"
-              @input="handleSearch"
               class="w-full px-4 py-2 bg-gray-100 rounded-lg pl-10"
               placeholder="Search"
               :disabled="isSearching"
@@ -172,6 +171,7 @@
       isSearching: false,
       isCheckingOut: false,
       isScanning: false,
+      timeout: null,
 
       init() {
         Livewire.on('refreshPage', (data) => {
@@ -179,9 +179,15 @@
           this.items = data[0].menuItems;
         });
 
-        this.$watch('searchQuery', async (searchValue) => {
-          console.log(searchQuery)
-        })
+        this.$watch('searchQuery', (value) => {
+            clearTimeout(this.timeout);
+            if (value.length < 3) return; // minimal 3 karakter
+            this.timeout = setTimeout(async () => {
+                this.isSearching = true;
+                await $wire.search(value);
+                this.isSearching = false;
+            }, 500);
+        });
       },
 
       getItemQuantity(item) {
@@ -222,7 +228,7 @@
       },
 
       async handleSearch() {
-        if (this.searchQuery.length < 2) return;
+        if (this.searchQuery.length < 6) return;
 
         this.isSearching = true;
         try {

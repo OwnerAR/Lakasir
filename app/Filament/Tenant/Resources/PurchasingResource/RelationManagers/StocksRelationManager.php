@@ -19,6 +19,10 @@ use Filament\Tables\Columns\DebounceColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Number;
 use Filament\Forms\Components\DatePicker;
+<<<<<<< HEAD
+=======
+
+>>>>>>> 591bdd2aa36387d5d0c3306ece0fdd438d003b63
 
 class StocksRelationManager extends RelationManager
 {
