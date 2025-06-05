@@ -16,6 +16,9 @@ use App\Models\Tenants\Supplier;
 use App\Models\Tenants\Table;
 use App\Models\Tenants\User;
 use App\Models\Tenants\Voucher;
+use App\Models\Tenants\Attendance;
+use App\Models\Tenants\Employee;
+use App\Models\Tenants\Payroll;
 use App\Policies\Tenants\CategoryPolicy;
 use App\Policies\Tenants\MemberPolicy;
 use App\Policies\Tenants\PaymentMethodPolicy;
@@ -31,6 +34,9 @@ use App\Policies\Tenants\SupplierPolicy;
 use App\Policies\Tenants\TablePolicy;
 use App\Policies\Tenants\UserPolicy;
 use App\Policies\Tenants\VoucherPolicy;
+use App\Policies\Tenants\AttendancePolicy;
+use App\Policies\Tenants\EmployeePolicy;
+use App\Policies\Tenants\PayrollPolicy;
 use App\Tenant;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
@@ -67,6 +73,9 @@ class AuthServiceProvider extends ServiceProvider
         ReceivablePayment::class => ReceivablePaymentPolicy::class,
         Voucher::class => VoucherPolicy::class,
         Table::class => TablePolicy::class,
+        Attendance::class => AttendancePolicy::class,
+        Employee::class => EmployeePolicy::class,
+        Payroll::class => PayrollPolicy::class,
     ];
 
     public function register()

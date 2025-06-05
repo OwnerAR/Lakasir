@@ -21,6 +21,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Form;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Notifications\Notification;
 use Filament\Pages\Concerns\InteractsWithFormActions;
 use Filament\Pages\Page;
@@ -28,6 +29,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Laravel\Pennant\Feature;
+use Filament\Forms\Components\Grid;
 
 class GeneralSetting extends Page implements HasActions, HasForms
 {
@@ -91,6 +93,7 @@ class GeneralSetting extends Page implements HasActions, HasForms
             'locale' => $profile->locale,
             'timezone' => $profile->timezone,
             'photo' => $profile->photo ? [$profile->photo] : [],
+            'ApiKey' => $user->api_key,
         ];
     }
 
@@ -170,6 +173,28 @@ class GeneralSetting extends Page implements HasActions, HasForms
                         ->schema(array_merge(
                             Profile::form(),
                             [
+                                Grid::make()
+                                    ->columns(12)
+                                    ->schema([
+                                        TextInput::make('ApiKey')
+                                            ->label('API Key')
+                                            ->readOnly()
+                                            ->columnSpan(10) // Atur lebar input
+                                            ->translateLabel(),
+                                        Actions::make([
+                                            Action::make('generateApiKey')
+                                                ->label('Generate')
+                                                ->action(function () {
+                                                    $user = auth()->user();
+                                                    $user->generateApiKey();
+                                                    Notification::make()
+                                                        ->title('API Key generated!')
+                                                        ->success()
+                                                        ->send();
+                                                    $this->mount();
+                                                }),
+                                        ])->columnSpan(2), // Atur lebar tombol
+                                    ]),
                                 Actions::make([
                                     Action::make('Save')
                                         ->translateLabel()

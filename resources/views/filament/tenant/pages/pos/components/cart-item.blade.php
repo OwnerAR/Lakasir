@@ -63,7 +63,7 @@
 
     <!-- Add More Button -->
     <button
-      @click="goToMenu"
+      @click="this.goToMenu"
       class="w-full mt-6 p-4 border-2 border-orange-500 text-orange-500 rounded-full font-medium flex items-center justify-center"
       >
       <span class="mr-2">+</span>
@@ -112,6 +112,7 @@
   Alpine.data('cart', () => {
     return {
       cart: @json($cartItems) || {},
+      isPaying: false,
 
       init() {
         Livewire.on('cartUpdated', (newCartItems) => {
@@ -130,10 +131,17 @@
       },
 
       continueToPayment() {
-        console.log('Proceeding to payment...');
-        console.log('Cart Total:', this.cartTotal);
-        console.log('Tax:', this.cartTotal * 0.1);
-        console.log('Final Total:', this.cartTotal * 1.1);
+        this.isPaying = true;
+        $wire.proceedThePayment({
+          cartItems: this.cart,
+          total: this.cartTotal * 1.1
+        })
+        .then(() => {
+          Livewire.navigate('/member/p-o-s');
+        }).catch(error => {
+          console.error('Payment error:', error);
+          alert('An error occurred while processing the payment. Please try again.');
+        });
       }
     }
   })

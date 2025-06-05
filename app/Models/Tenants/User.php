@@ -6,6 +6,7 @@ use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasAvatar;
 use Filament\Models\Contracts\HasName;
 use Filament\Panel;
+use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -112,5 +113,12 @@ class User extends Authenticatable implements FilamentUser, HasAvatar, HasName
     public function scopeOwner(Builder $builder)
     {
         return $builder->whereIsOwner(true);
+    }
+
+    public function generateApiKey(): string
+    {
+        $this->api_key = hash('sha256', Str::uuid()->toString() . now());
+        $this->save();
+        return $this->api_key;
     }
 }

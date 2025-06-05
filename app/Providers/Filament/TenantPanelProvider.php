@@ -38,6 +38,9 @@ use App\Filament\Tenant\Resources\SupplierResource;
 use App\Filament\Tenant\Resources\TableResource;
 use App\Filament\Tenant\Resources\UserResource;
 use App\Filament\Tenant\Resources\VoucherResource;
+use App\Filament\Tenant\Resources\EmployeeResource;
+use App\Filament\Tenant\Resources\AttendanceResource;
+use App\Filament\Tenant\Resources\PayrollResource;
 use App\Http\Middleware\LocalizationMiddleware;
 use App\Models\Tenants\About;
 use App\Tenant;
@@ -173,6 +176,9 @@ class TenantPanelProvider extends PanelProvider
             $this->generateNavigationItem(MemberResource::class, Member::class),
             $this->generateNavigationItem(PaymentMethodResource::class, PaymentMethod::class),
             $this->generateNavigationItem(ReceivableResource::class, Receivable::class),
+            $this->generateNavigationItem(EmployeeResource::class, Employee::class),
+            $this->generateNavigationItem(AttendanceResource::class, Attendance::class),
+            $this->generateNavigationItem(PayrollResource::class, Payroll::class),
         ];
     }
 
@@ -201,6 +207,11 @@ class TenantPanelProvider extends PanelProvider
                         PurchasingReport::class,
                     ]
                 ),
+            ]),
+            NavigationGroup::make(__('HR'))->items([
+                $this->generateNavigationItem(EmployeeResource::class),
+                $this->generateNavigationItem(AttendanceResource::class),
+                $this->generateNavigationItem(PayrollResource::class),
             ]),
             NavigationGroup::make(__('General'))->label('')->collapsible(false)->items([
                 $this->generateNavigationItem(VoucherResource::class, Voucher::class),
