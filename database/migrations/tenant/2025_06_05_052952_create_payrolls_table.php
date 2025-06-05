@@ -16,7 +16,7 @@ return new class extends Migration
             $table->foreignId('employee_id')->constrained('employees');
             $table->date('period');
             $table->decimal('amount', 15, 2);
-            $table->string('status')->default('pending');
+            $table->string('status')->default('unpaid'); // 'paid' or 'unpaid'
             $table->timestamps();
         });
     }
