@@ -46,6 +46,7 @@ trait HasProductForm
         return Select::make('category_id')
             ->translateLabel()
             ->options(Category::pluck('name', 'id'))
+            ->searchable()
             ->native(false)
             ->required()
             ->createOptionForm([
@@ -89,7 +90,7 @@ trait HasProductForm
             ->mask(RawJs::make('$money($input)'))
             ->lte('selling_price')
             ->default(0)
-            // ->visible(Feature::active(Product))
+            //->visible(Feature::active(ProductInitialPrice::class))
             ->stripCharacters(',')
             ->numeric()
             ->prefix(Setting::get('currency', 'IDR'))

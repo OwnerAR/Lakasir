@@ -5,6 +5,8 @@ namespace App\Filament\Tenant\Resources;
 use App\Filament\Tenant\Resources\PayrollResource\Pages;
 use App\Filament\Tenant\Resources\PayrollResource\RelationManagers;
 use App\Models\Tenants\Payroll;
+use App\Models\Tenants\Employee;
+use App\Models\Tenants\Setting;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -12,7 +14,12 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\TextInputColumn;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Select;
+use Filament\Tables\Filters\Filter;
+use Filament\Tables\Filters\SelectFilter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 
@@ -21,26 +28,32 @@ class PayrollResource extends Resource
     protected static ?string $model = Payroll::class;
     protected static ?string $label = 'Payroll';
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationIcon = 'heroicon-o-currency-dollar';
 
     public static function form(Form $form): Form
     {
         return $form
             ->schema([
-                Forms\Components\TextInput::make('employee_id')
-                    ->label(__('Employee ID'))
+                Select::make('employee_id')
+                    ->label(__('Employee'))
                     ->required()
-                    ->translateLabel(),
-                Forms\Components\TextInput::make('amount')
+                    ->translateLabel()
+                    ->options(Employee::all()->pluck('name', 'id')),
+                TextInput::make('amount')
                     ->label(__('Amount'))
                     ->required()
                     ->translateLabel(),
-                Forms\Components\TextInput::make('date')
-                    ->label(__('Date'))
+                DatePicker::make('period')
+                    ->label(__('Period'))
                     ->required()
                     ->translateLabel(),
-                Textarea::make('note')
-                    ->label(__('Note'))
+                Select::make('status')
+                    ->label(__('Status'))
+                    ->required()
+                    ->options([
+                        'paid' => __('Paid'),
+                        'unpaid' => __('Unpaid'),
+                    ])
                     ->translateLabel(),
             ]);
     }
@@ -49,25 +62,26 @@ class PayrollResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('employee_id')
-                    ->searchable()
+                TextColumn::make('employee.name')
+                    ->label(__('Employee'))
                     ->translateLabel()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('amount')
+                TextColumn::make('amount')
                     ->searchable()
+                    ->money(Setting::get('currency', 'IDR'))
                     ->translateLabel()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('period')
+                TextColumn::make('period')
                     ->date()
                     ->searchable()
                     ->translateLabel()
                     ->sortable(),
-                TextColumn::make('note')
+                TextColumn::make('status')
                     ->translateLabel()
                     ->sortable(),
             ])
             ->filters([
-                Tables\Filters\Filter::make('period')
+                Filter::make('period')
                     ->form([
                         Forms\Components\DatePicker::make('period')
                             ->label(__('Select Period'))
@@ -75,15 +89,23 @@ class PayrollResource extends Resource
                             ->translateLabel(),
                     ])
                     ->query(function (Builder $query, array $data) {
-                        return $query->whereDate('period', $data['period']);
+                        if (!empty($data['period'])) {
+                            return $query->whereDate('period', $data['period']);
+                        }
+                        return $query;
                     }),
-                    Tables\Filters\Filter::make('employee_id')
-                    ->form([
-                        Forms\Components\TextInput::make('employee_id')
-                            ->label(__('Employee ID'))
-                            ->required()
-                            ->translateLabel(),
-                    ]),
+                SelectFilter::make('employee_id')
+                    ->label(__('Employee'))
+                    ->searchable()
+                    ->options(fn () => Employee::pluck('name', 'id')->toArray())
+                    ->translateLabel(),
+                SelectFilter::make('status')
+                    ->label(__('Status'))
+                    ->options([
+                        'paid' => __('Paid'),
+                        'unpaid' => __('Unpaid'),
+                    ])
+                    ->translateLabel(),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),

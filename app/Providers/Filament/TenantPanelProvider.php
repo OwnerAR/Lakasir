@@ -41,6 +41,7 @@ use App\Filament\Tenant\Resources\VoucherResource;
 use App\Filament\Tenant\Resources\EmployeeResource;
 use App\Filament\Tenant\Resources\AttendanceResource;
 use App\Filament\Tenant\Resources\PayrollResource;
+use App\Filament\Tenant\Resources\IntegrasiAPIResource;
 use App\Http\Middleware\LocalizationMiddleware;
 use App\Models\Tenants\About;
 use App\Tenant;
@@ -179,6 +180,7 @@ class TenantPanelProvider extends PanelProvider
             $this->generateNavigationItem(EmployeeResource::class, Employee::class),
             $this->generateNavigationItem(AttendanceResource::class, Attendance::class),
             $this->generateNavigationItem(PayrollResource::class, Payroll::class),
+            $this->generateNavigationItem(IntegrasiAPIResource::class, IntegrasiAPI::class),
         ];
     }
 
@@ -218,6 +220,7 @@ class TenantPanelProvider extends PanelProvider
             ]),
             NavigationGroup::make(__('Setting'))->collapsible(false)->items([
                 $this->generateNavigationItem(GeneralSetting::class),
+                $this->generateNavigationItem(IntegrasiAPIResource::class),
                 $this->generateNavigationItem(Printer::class),
             ]),
         ];

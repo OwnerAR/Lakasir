@@ -5,6 +5,7 @@ namespace App\Filament\Tenant\Resources;
 use App\Filament\Tenant\Resources\EmployeeResource\Pages;
 use App\Filament\Tenant\Resources\EmployeeResource\RelationManagers;
 use App\Models\Tenants\Employee;
+use App\Models\Tenants\Setting;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -16,12 +17,13 @@ use Filament\Tables\Columns\ToggleColumn;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 
+
 class EmployeeResource extends Resource
 {
     protected static ?string $model = Employee::class;
     protected static ?string $label = 'Employee';
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationIcon = 'heroicon-o-users';
 
     public static function form(Form $form): Form
     {
@@ -43,8 +45,12 @@ class EmployeeResource extends Resource
                     ->label(__('Position'))
                     ->required()
                     ->translateLabel(),
-                Forms\Components\TextInput::make('shift')
+                Forms\Components\Select::make('shift')
                     ->label(__('Shift'))
+                    ->options([
+                        'pagi' => __('Morning'),
+                        'siang' => __('Afternoon'),
+                    ])
                     ->required()
                     ->translateLabel(),
                 Forms\Components\TextInput::make('salary')
@@ -89,7 +95,7 @@ class EmployeeResource extends Resource
                     ->sortable(),
                 Tables\Columns\TextColumn::make('salary')
                     ->label(__('Salary'))
-                    ->searchable()
+                    ->money(Setting::get('currency', 'IDR'))
                     ->translateLabel()
                     ->sortable(),
                 ToggleColumn::make('is_active')

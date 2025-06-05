@@ -124,6 +124,7 @@ class POS extends Page
     }
     public function proceedThePayment($data)
     {
+
         $this->proceedPayment($data);
 
         $this->dispatch('refreshPage', [
