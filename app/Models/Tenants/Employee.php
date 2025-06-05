@@ -9,13 +9,13 @@ class Employee extends Model
 {
     use HasFactory;
     protected $fillable = [
-        'employeeId',
+        'employee_id',
         'name',
-        'whatsappId',
+        'whatsapp_id',
         'position',
         'shift',
         'salary',
-        'isActive',
+        'is_active',
     ];
     //
     public function attendances()
