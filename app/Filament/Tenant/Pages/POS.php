@@ -122,4 +122,14 @@ class POS extends Page
             'menuItems' => $this->menuItems,
         ]);
     }
+    public function proceedThePayment($data)
+    {
+        $this->proceedPayment($data);
+
+        $this->dispatch('refreshPage', [
+            'cartItems' => $this->cartItems,
+            'categories' => $this->categories,
+            'menuItems' => $this->menuItems,
+        ]);
+    }
 }
