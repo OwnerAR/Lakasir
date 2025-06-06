@@ -6,6 +6,7 @@ use App\Filament\Tenant\Resources\EmployeeResource\Pages;
 use App\Filament\Tenant\Resources\EmployeeResource\RelationManagers;
 use App\Models\Tenants\Employee;
 use App\Models\Tenants\Setting;
+use App\Models\Tenants\UploadedFile;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -31,6 +32,7 @@ class EmployeeResource extends Resource
             ->schema([
                 Forms\Components\TextInput::make('employee_id')
                     ->label(__('Employee ID'))
+                    ->unique(ignoreRecord: true)
                     ->required()
                     ->translateLabel(),
                 Forms\Components\TextInput::make('name')
@@ -39,6 +41,7 @@ class EmployeeResource extends Resource
                     ->translateLabel(),
                 Forms\Components\TextInput::make('whatsapp_id')
                     ->label(__('WhatsApp ID'))
+                    ->unique(ignoreRecord: true)
                     ->required()
                     ->translateLabel(),
                 Forms\Components\TextInput::make('position')
@@ -58,6 +61,16 @@ class EmployeeResource extends Resource
                     ->required()
                     ->numeric()
                     ->translateLabel(),
+                // Upload profile picture
+                Forms\Components\FileUpload::make('foto_url')
+                    ->label(__('Profile Picture'))
+                    ->disk('public')
+                    ->directory('employees')
+                    ->image()
+                    ->maxSize(1024)
+                    ->acceptedFileTypes(['image/*'])
+                    ->translateLabel()
+                    ->nullable(),
                 Toggle::make('is_active')
                     ->label(__('Active'))
                     ->default(true)
@@ -98,6 +111,11 @@ class EmployeeResource extends Resource
                     ->money(Setting::get('currency', 'IDR'))
                     ->translateLabel()
                     ->sortable(),
+                Tables\Columns\TextColumn::make('foto_url')
+                    ->label(__('Profile Picture'))
+                    ->copyable()
+                    ->translateLabel()
+                    ->formatStateUsing(fn ($state) => $state ?: '-'),
                 ToggleColumn::make('is_active')
                     ->label(__('Active'))
                     ->translateLabel()

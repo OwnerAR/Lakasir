@@ -15,6 +15,7 @@ trait HasSupplierForm
                 ->required(),
             TextInput::make('phone_number')
                 ->translateLabel()
+                ->unique(ignoreRecord: true)
                 ->rule('regex:/^(\+?\d{1,3}[-.\s]?)?(\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}$/')
                 ->required(),
             TextInput::make('contact_name')

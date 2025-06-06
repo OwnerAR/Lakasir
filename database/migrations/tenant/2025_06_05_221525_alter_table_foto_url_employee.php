@@ -11,7 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        //
+        Schema::table('employees', function (Blueprint $table) {
+            $table->string('foto_url')->nullable();
+        });
     }
 
     /**
@@ -19,6 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        //
+        Schema::table('employees', function (Blueprint $table) {
+            $table->dropColumn('foto_url');
+        });
     }
 };

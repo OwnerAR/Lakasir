@@ -15,6 +15,10 @@ class AuthenticatedSessionController extends Controller
         $request->authenticate();
         /** @var \App\Models\Tenants\User $user */
         $user = $request->user();
+        $role = $user->roles()->first();
+        $permissions = $role
+            ? $role->permissions()->where('guard_name', 'sanctum')->pluck('name')->toArray()
+            : [];
         $token = $request->user()->createToken($user->getRememberTokenName());
 
         return response()->json([
@@ -22,7 +26,7 @@ class AuthenticatedSessionController extends Controller
             'message' => 'Yay! success to login',
             'data' => array_merge($user->toArray(), [
                 'token' => $token->plainTextToken,
-                'permissions' => $user->roles()->first()->permissions()->where('guard_name', 'sanctum')->pluck('name')->toArray(),
+                'permissions' => $permissions,
                 'features' => Feature::all(),
             ]),
         ]);

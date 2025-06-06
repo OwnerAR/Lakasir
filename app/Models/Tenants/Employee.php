@@ -15,6 +15,7 @@ class Employee extends Model
         'position',
         'shift',
         'salary',
+        'foto_url',
         'is_active',
     ];
     //

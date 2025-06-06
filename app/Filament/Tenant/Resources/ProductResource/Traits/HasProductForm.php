@@ -152,6 +152,7 @@ trait HasProductForm
         return TextInput::make('barcode')
             ->helperText(__('Point the cursor to this input first then scan the barcode'))
             ->visible(Feature::active(ProductBarcode::class))
+            ->unique(ignoreRecord: true)
             ->translateLabel();
     }
 
