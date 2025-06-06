@@ -8,6 +8,7 @@ use App\Filament\Tenant\Resources\ProductResource\Traits\HasProductForm;
 use App\Models\Tenants\Setting;
 use App\Models\Tenants\Stock;
 use App\Services\Tenants\StockService;
+use App\Events\RecalculateEvent;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Form;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -59,9 +60,7 @@ class StocksRelationManager extends RelationManager
                             'product_id' => $this->ownerRecord->id,
                             'is_ready' => true,
                         ]));
-                        $product = $this->ownerRecord;
-                        $product->stock += $data['stock'];
-                        $product->save();
+                        event(new RecalculateEvent(collect([$this->ownerRecord]), []));
                     })
                     ->createAnother(false),
             ])

@@ -10,6 +10,7 @@ class Attendance extends Model
     use HasFactory;
     protected $fillable = [
         'employee_id',
+        'date',
         'clock_in',
         'clock_out',
         'status',
@@ -25,4 +26,8 @@ class Attendance extends Model
      *
      * @var array
      */
+    public function employee()
+    {
+        return $this->belongsTo(Employee::class);
+    }
 }

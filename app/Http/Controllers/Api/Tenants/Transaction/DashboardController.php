@@ -139,6 +139,7 @@ class DashboardController extends Controller
 
     private function getDateRange(?string $filteryType, ?string $timezone)
     {
+        $timezone = $timezone ?: config('app.timezone', 'UTC');
         switch ($filteryType) {
             case 'yesterday':
                 $startDate = now()->subDays(1)->startOfDay();

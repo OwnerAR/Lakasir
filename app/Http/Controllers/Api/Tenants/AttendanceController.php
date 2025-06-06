@@ -15,6 +15,7 @@ class AttendanceController extends Controller
         try {
             $validated = $request->validate([
                 'whatsapp_id' => 'required|exists:employees,whatsapp_id',
+                'date' => 'required|date',
                 'clock_in' => 'required_without:clock_out|nullable|date_format:H:i',
                 'clock_out' => 'required_without:clock_in|nullable|date_format:H:i|after:clock_in',
                 'status' => 'required|string',
@@ -51,13 +52,13 @@ class AttendanceController extends Controller
                 ], 403);
             }
         }
-        if (!empty($validated['clock_in']) && !$attendanceToday->clock_in) {
+        if (!empty($validated['clock_in'])) {
             $clockIn = $validated['clock_in'];
             $shift = null;
             if ($clockIn >= '07:00' && $clockIn <= '08:00') {
                 $shift = 'pagi';
             } elseif ($clockIn >= '17:00' && $clockIn <= '19:00') {
-                $shift = 'sore';
+                $shift = 'siang';
             } elseif ($clockIn >= '21:00' && $clockIn <= '23:00') {
                 $shift = 'malam';
             }

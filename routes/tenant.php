@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\Tenants\Transaction\DashboardController;
 use App\Http\Controllers\Api\Tenants\Transaction\SellingController;
 use App\Http\Controllers\Api\Tenants\UploadController;
 use App\Http\Controllers\Api\Tenants\AttendanceController;
+use App\Http\Controllers\Api\Tenants\EmployeeController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
@@ -210,6 +211,10 @@ Route::middleware([
         });
         Route::post('/attendance', [AttendanceController::class, 'store'])
             ->middleware('bot.api');
+
+        Route::get('/employee', [EmployeeController::class, 'getEmployees'])
+            ->middleware('bot.api')
+            ->name('employee.get');
 
         Route::get('/', function () {
             return ['Laravel' => app()->version()];

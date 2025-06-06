@@ -6,6 +6,7 @@ use App\Filament\Tenant\Resources\AttendanceResource\Pages;
 use App\Filament\Tenant\Resources\AttendanceResource\RelationManagers;
 use App\Traits\HasTranslatableResource;
 use App\Models\Tenants\Attendance;
+use App\Models\Tenants\Employee;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -14,6 +15,7 @@ use Filament\Tables;
 use Filament\Forms\Components\TextInputColumn;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\TimePicker;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Illuminate\Database\Eloquent\Builder;
@@ -39,9 +41,16 @@ class AttendanceResource extends Resource
                     ->label(__('Date'))
                     ->required()
                     ->translateLabel(),
+                TimePicker::make('clock_in')
+                    ->label(__('Clock In'))
+                    ->translateLabel()
+                    ->time(),
+                TimePicker::make('clock_out')
+                    ->label(__('Clock Out'))
+                    ->translateLabel()
+                    ->time(),
                 TextInput::make('status')
                     ->label(__('Status'))
-                    ->required()
                     ->translateLabel(),
             ])->columns(2);
     }
@@ -53,7 +62,13 @@ class AttendanceResource extends Resource
                 Tables\Columns\TextColumn::make('id')
                     ->searchable()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('employee_id')
+                Tables\Columns\TextColumn::make('employee.name')
+                    ->label(__('Employee Name'))
+                    ->searchable()
+                    ->translateLabel()
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('date')
+                    ->date()
                     ->searchable()
                     ->translateLabel()
                     ->sortable(),
@@ -69,6 +84,10 @@ class AttendanceResource extends Resource
                     ->sortable(),
                 TextColumn::make('status')
                     ->searchable()
+                    ->translateLabel()
+                    ->sortable(),
+                TextColumn::make('updated_at')
+                    ->dateTime()
                     ->translateLabel()
                     ->sortable(),
             ])

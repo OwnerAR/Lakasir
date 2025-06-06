@@ -26,6 +26,7 @@ class CategoryResource extends Resource
             ->schema([
                 TextInput::make('name')
                     ->translateLabel()
+                    ->unique(Category::class, 'name', ignorable: fn (?Category $record) => $record)
                     ->required(),
 
             ]);
