@@ -7,6 +7,7 @@ use App\Filament\Tenant\Resources\PayrollResource\RelationManagers;
 use App\Models\Tenants\Payroll;
 use App\Models\Tenants\Employee;
 use App\Models\Tenants\Setting;
+use App\Services\TigaPutriService;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -20,8 +21,16 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Columns\SelectColumn;
+use Filament\Tables\Actions\Action;
+use Filament\Tables\Actions\BulkAction;
+use Filament\Tables\Actions\DeleteBulkAction;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Carbon;
+use Filament\Notifications\Notification;
 
 class PayrollResource extends Resource
 {
@@ -77,7 +86,18 @@ class PayrollResource extends Resource
                     ->translateLabel()
                     ->sortable(),
                 TextColumn::make('status')
+                    ->label(__('Status'))
                     ->translateLabel()
+                    ->formatStateUsing(fn ($state) => match ($state) {
+                        'paid' => __('Paid'),
+                        'unpaid' => __('Unpaid'),
+                        default => __('Unknown'),
+                    })
+                    ->color(fn ($state) => match ($state) {
+                        'paid' => 'success',
+                        'unpaid' => 'danger',
+                        default => 'secondary',
+                    })
                     ->sortable(),
             ])
             ->filters([
@@ -108,11 +128,59 @@ class PayrollResource extends Resource
                     ->translateLabel(),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
+                Action::make('send')
+                    ->label(__('Send'))
+                    ->icon('heroicon-o-paper-airplane')
+                    ->action(function (Payroll $record) {
+                        try {
+                            $amountParse = str_replace('.00', '', $record->amount);
+                            $service = new TigaPutriService();
+                            if ($record->status !== 'unpaid') {
+                                Notification::make()
+                                    ->danger()
+                                    ->title(__('Error'))
+                                    ->body(__('Payroll is already paid.'))
+                                    ->send();
+                                return;
+                            }
+                            $response = $service->commandNonTransaction(
+                                'TS.' . $record->employee->employee_id . '.' . $amountParse,
+                                Carbon::now()->format('His'),
+                            );
+                            if ($response) {
+                                Notification::make()
+                                    ->success()
+                                    ->title(__('Success'))
+                                    ->body(__('Payroll sent successfully.'))
+                                    ->send();
+                                $record->update(['status' => 'paid']);
+                            } else {
+                                Notification::make()
+                                    ->danger()
+                                    ->title(__('Error'))
+                                    ->body(__('Failed to send payroll.'))
+                                    ->send();
+                            }
+                        } catch (\Exception $e) {
+                            Notification::make()
+                                ->danger()
+                                ->title(__('Error'))
+                                ->body(__('An error occurred while sending payroll: :message', ['message' => $e->getMessage()]))
+                                ->send();
+                        }
+                    })
+                    ->translateLabel(),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),
+                    BulkAction::make('markAsPaid')
+                        ->label(__('Mark as Paid'))
+                        ->action(function (Collection $records) {
+                            $records->each(fn ($record) => $record->update(['status' => 'paid']));
+                        })
+                        ->requiresConfirmation()
+                        ->icon('heroicon-o-check-circle'),
                 ]),
             ]);
     }

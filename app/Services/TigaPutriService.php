@@ -93,18 +93,15 @@ class TigaPutriService
     }
 
     public function commandNonTransaction(
-        ?string $resellerId,
         string $message,
-        ?string $pin,
-        ?string $password,
         string $jam
     ) {
         if (!$this->credential) {
             return 'Credential TigaPutri belum diatur';
         }
-        $resellerId = $resellerId ?? $this->credential->username;
-        $pin = $pin ?? $this->credential->pin;
-        $password = $password ?? $this->credential->password;
+        $resellerId = strtoupper($this->credential->username);
+        $pin = $this->credential->pin;
+        $password = $this->credential->password;
         $baseurl = $this->credential->base_url;
 
         $signature = $this->createSignatureNonTrx(
@@ -122,10 +119,27 @@ class TigaPutriService
         ];
         try {
             $response = Http::timeout(120)->post($baseurl, $body);
-            return $response->json('msg');
+            if ($response->successful()) {
+                $data = $response->json();
+                if (isset($data['status_code']) && $data['status_code'] === '0') {
+                    return $data;
+                } else {
+                    Log::error('Failed to send command', [
+                        'message' => $message,
+                        'response' => $data,
+                    ]);
+                    return null;
+                }
+            } else {
+                Log::error('HTTP request failed', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+                return null;
+            }
         } catch (\Exception $e) {
             Log::error('Error from Tiga Putri:', ['error' => $e->getMessage()]);
-            return 'Error Server, mohon hubungi CS';
+            return null;
         }
     }
 }
