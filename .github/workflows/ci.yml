@@ -17,7 +17,7 @@ jobs:
           MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: test
           MYSQL_USER: test
-          MYSQL_PASSWORD: test
+          MYSQL_PASSWORD: yourpassword
         ports:
           - 3306:3306
         options: >-
