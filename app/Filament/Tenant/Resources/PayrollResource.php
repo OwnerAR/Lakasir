@@ -88,6 +88,7 @@ class PayrollResource extends Resource
                 TextColumn::make('status')
                     ->label(__('Status'))
                     ->translateLabel()
+                    ->badge()
                     ->formatStateUsing(fn ($state) => match ($state) {
                         'paid' => __('Paid'),
                         'unpaid' => __('Unpaid'),
@@ -169,6 +170,7 @@ class PayrollResource extends Resource
                                 ->send();
                         }
                     })
+                    ->visible(fn (Payroll $record) => $record->status === 'unpaid')
                     ->translateLabel(),
             ])
             ->bulkActions([

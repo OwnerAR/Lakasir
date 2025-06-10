@@ -24,6 +24,7 @@ use App\Filament\Tenant\Pages\PurchasingReport;
 use App\Filament\Tenant\Pages\Report;
 use App\Filament\Tenant\Pages\SellingReport;
 use App\Filament\Tenant\Pages\TenantLogin;
+use App\Filament\Tenant\Pages\Whatsapp;
 use App\Filament\Tenant\Resources\CategoryResource;
 use App\Filament\Tenant\Resources\MemberResource;
 use App\Filament\Tenant\Resources\PaymentMethodResource;
@@ -220,6 +221,7 @@ class TenantPanelProvider extends PanelProvider
             ]),
             NavigationGroup::make(__('Setting'))->collapsible(false)->items([
                 $this->generateNavigationItem(GeneralSetting::class),
+                $this->generateNavigationItem(Whatsapp::class),
                 $this->generateNavigationItem(IntegrasiAPIResource::class),
                 $this->generateNavigationItem(Printer::class),
             ]),

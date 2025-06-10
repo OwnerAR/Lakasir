@@ -24,7 +24,7 @@ export default {
           primary: "#0E1389",
         },
         primary: {
-            DEFAULT: "0E1389",
+            DEFAULT: "#0E1389",
         },
       },
     },

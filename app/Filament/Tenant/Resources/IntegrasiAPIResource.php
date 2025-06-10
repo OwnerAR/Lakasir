@@ -35,9 +35,11 @@ class IntegrasiAPIResource extends Resource
                     ->translateLabel(),
                 Forms\Components\TextInput::make('password')
                     ->required()
+                    ->password()
                     ->translateLabel(),
                 Forms\Components\TextInput::make('pin')
                     ->required()
+                    ->password()
                     ->translateLabel(),
                 Forms\Components\Select::make('type')
                     ->required()
