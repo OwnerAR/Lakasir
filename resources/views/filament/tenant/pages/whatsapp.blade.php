@@ -1,3 +1,3 @@
 <x-filament-panels::page>
-    <livewire:tenants.whatsapp-qr-widgets />
+    <livewire:tenant.whatsapp-qr-widget />
 </x-filament-panels::page>

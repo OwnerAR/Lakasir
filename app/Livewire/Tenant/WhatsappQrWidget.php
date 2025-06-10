@@ -7,6 +7,7 @@ use App\Services\WhatsappService;
 
 class WhatsappQrWidget extends Component
 {
+    public $status = null;
     public $qr = null;
 
     public function mount()
@@ -16,10 +17,11 @@ class WhatsappQrWidget extends Component
 
     public function fetchQr()
     {
-        $response = WhatsappService::getStatus();
-        dd($response);
-        if ($response['status'] === 'success') {
-            $this->qr = $response['data']['qr'];
+        $service = new WhatsappService();
+        $response = $service->getStatus();
+        $this->status = $response['status'] ?? null;
+        if ($response['qrCode'] ?? false) {
+            $this->qr = $response['qrCode'];
         }
     }
 

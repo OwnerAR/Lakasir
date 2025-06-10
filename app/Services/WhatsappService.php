@@ -24,7 +24,7 @@ class WhatsappService
     public function getStatus()
     {
         $response = Http::withToken($this->token)
-            ->get("{$this->baseUrl}/api/status");
+            ->get("{$this->baseUrl}/api/whatsapp/status");
 
         return $response->json();
     }

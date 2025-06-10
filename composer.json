@@ -25,6 +25,7 @@
         "predis/predis": "^2.2",
         "sheenazien8/konstantiq": "^1.0",
         "silviolleite/laravelpwa": "^2.0",
+        "simplesoftwareio/simple-qrcode": "^4.2",
         "spatie/laravel-permission": "6.9.0",
         "spatie/laravel-query-builder": "^6.0",
         "stancl/tenancy": "^3.6",
