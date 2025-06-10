@@ -29,6 +29,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Copy .env.testing
+        run: cp .env.testing .env
+
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
@@ -38,9 +41,6 @@ jobs:
 
       - name: Install Composer dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
-
-      - name: Copy .env.testing
-        run: cp .env.testing .env
 
       - name: Generate key
         run: php artisan key:generate
