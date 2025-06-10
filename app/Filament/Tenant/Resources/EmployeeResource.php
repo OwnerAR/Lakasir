@@ -52,7 +52,7 @@ class EmployeeResource extends Resource
                     ->label(__('Shift'))
                     ->options([
                         'pagi' => __('Morning'),
-                        'siang' => __('Afternoon'),
+                        'sore' => __('Afternoon'),
                     ])
                     ->required()
                     ->translateLabel(),

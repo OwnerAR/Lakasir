@@ -209,12 +209,8 @@ Route::middleware([
             });
 
         });
-        Route::post('/attendance', [AttendanceController::class, 'store'])
+        Route::post('/attendance', [AttendanceController::class, 'storeAttendance'])
             ->middleware('bot.api');
-
-        Route::get('/employee', [EmployeeController::class, 'getEmployees'])
-            ->middleware('bot.api')
-            ->name('employee.get');
 
         Route::get('/', function () {
             return ['Laravel' => app()->version()];

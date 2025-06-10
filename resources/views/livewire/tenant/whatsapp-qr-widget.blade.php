@@ -5,8 +5,8 @@
     }
 @endphp
 <div class="flex flex-col items-center justify-center py-6">
-    @if($status === 'ready')
-        <div class="text-green-600 font-bold text-lg mb-4">Status WhatsApp siap dipakai</div>
+    @if($status === 'open')
+        <div class="text-green-600 font-bold text-lg mb-4">WhatsApp siap dipakai</div>
     @elseif($qrImage)
         {!! $qrImage !!}
         <div class="mt-2 text-center text-sm text-gray-500">Scan QR dengan WhatsApp Anda</div>

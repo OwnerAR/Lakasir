@@ -6,14 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Models\Tenants\Attendance;
 use App\Models\Tenants\Employee;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Redis;
 use Illuminate\Validation\ValidationException;
 
 class AttendanceController extends Controller
 {
-    public function store(Request $request)
+    private function store($data)
     {
         try {
-            $validated = $request->validate([
+            $validated = $data->validate([
                 'whatsapp_id' => 'required|exists:employees,whatsapp_id',
                 'date' => 'required|date',
                 'clock_in' => 'required_without:clock_out|nullable|date_format:H:i',
@@ -28,19 +29,6 @@ class AttendanceController extends Controller
             ], 422);
         }
         $employee = Employee::where('whatsapp_id', $validated['whatsapp_id'])->first();
-        if (!$employee) {
-            return response()->json([
-                'success' => false,
-                'message' => __('Employee not found'),
-            ], 404);
-        }
-        if (!$employee->is_active) {
-            return response()->json([
-                'success' => false,
-                'message' => __('Employee is not active'),
-            ], 403);
-        }
-
         $attendanceToday = Attendance::where('employee_id', $employee->id)
             ->whereDate('created_at', now()->toDateString())
             ->first();
@@ -55,17 +43,17 @@ class AttendanceController extends Controller
         if (!empty($validated['clock_in'])) {
             $clockIn = $validated['clock_in'];
             $shift = null;
-            if ($clockIn >= '07:00' && $clockIn <= '08:00') {
+            if ($clockIn >= '06:00' && $clockIn <= '08:00') {
                 $shift = 'pagi';
             } elseif ($clockIn >= '17:00' && $clockIn <= '19:00') {
-                $shift = 'siang';
+                $shift = 'sore';
             } elseif ($clockIn >= '21:00' && $clockIn <= '23:00') {
                 $shift = 'malam';
             }
             if (strtolower($employee->shift) !== $shift) {
                 return response()->json([
                     'success' => false,
-                    'message' => __('Employee shift does not match'),
+                    'message' => __('Sorry, you are not allowed to clock in at this time. Your shift is ' . $employee->shift),
                 ], 403);
             }
             $attendance = Attendance::create(array_merge($validated, [
@@ -104,6 +92,89 @@ class AttendanceController extends Controller
         return response()->json([
             'success' => false,
             'message' => __('Invalid request, clock_in or clock_out is required'),
-        ], 400);
+        ], 500);
+    }
+    public function storeAttendance(Request $request)
+    {
+        $request->validate([
+            'from' => 'required|string',
+            'participant' => 'nullable|string',
+            'message' => 'nullable|string',
+            'media' => 'nullable|string',
+        ]);
+        $whatsappId = trim(str_replace('@s.whatsapp.net', '', strtolower($request->input('participant'))));
+        if (Redis::get('whatsapp:ignore_self:' . $whatsappId)) {
+            return response()->json([
+                'success' => false,
+                'message' => __('Message already processed or ignored'),
+            ], 500);
+        }
+
+        if ($request->input('fromMe')) {
+            Redis::set('whatsapp:ignore_self:' . $whatsappId, true, 'EX', 300);
+            return response()->json([
+                'success' => false,
+                'message' => __('Cannot process message from self'),
+            ], 400);
+        }
+
+        $employee = Employee::where('whatsapp_id', $whatsappId)->first();
+
+        if (!$employee) {
+            Redis::set('whatsapp:ignore_self:' . $whatsappId, true, 'EX', 300);
+            return response()->json([
+                'success' => false,
+                'message' => __('Employee not found'),
+            ], 404);
+        }
+        if (!$employee->is_active) {
+            Redis::set('whatsapp:ignore_self:' . $whatsappId, true, 'EX', 300);
+            return response()->json([
+                'success' => false,
+                'message' => __('Employee is not active'),
+            ], 403);
+        }
+        if (!$request->filled('media')) {
+            Redis::set('whatsapp:ignore_self:' . $whatsappId, true, 'EX', 300);
+            return response()->json([
+                'success' => false,
+                'message' => __('Media is required for attendance'),
+            ], 400);
+        }
+        // Simpan foto jika belum ada dan media dikirim
+        if (!$employee->foto_url && $request->filled('media')) {
+            $mediaData = base64_decode($request->input('media'));
+            $filename = 'employee_' . $employee->id . '_' . time() . '.jpg';
+            $path = 'uploads/employee_photos/' . $filename;
+            Storage::disk('public')->put($path, $mediaData);
+            $employee->foto_url = 'storage/' . $path;
+            $employee->save();
+        }
+
+        // Gunakan Redis key unik per user per hari
+        $redisKey = 'whatsapp:attendance:' . $employee->id . ':' . now()->toDateString();
+        $session = Redis::get($redisKey);
+
+        $data = [
+            'whatsapp_id' => $whatsappId,
+            'date' => now()->toDateString(),
+            'clock_in' => null,
+            'clock_out' => null,
+            'note' => $request->input('message'),
+            'status' => 'present',
+        ];
+
+        if (!$session) {
+            // Clock in
+            $data['clock_in'] = now()->format('H:i');
+            Redis::set($redisKey, 'clocked_in');
+        } else {
+            // Clock out
+            $data['clock_out'] = now()->format('H:i');
+            Redis::del($redisKey); // hapus session setelah clock out
+        }
+
+        $attendanceRequest = new Request($data);
+        return $this->store($attendanceRequest);
     }
 }
