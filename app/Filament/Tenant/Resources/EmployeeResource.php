@@ -104,6 +104,11 @@ class EmployeeResource extends Resource
                 Tables\Columns\TextColumn::make('shift')
                     ->label(__('Shift'))
                     ->searchable()
+                    ->formatStateUsing(fn ($state) => match ($state) {
+                        'pagi' => __('Morning'),
+                        'sore' => __('Afternoon'),
+                        default => $state,
+                    })
                     ->translateLabel()
                     ->sortable(),
                 Tables\Columns\TextColumn::make('salary')
