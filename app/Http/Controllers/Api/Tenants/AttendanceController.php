@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Tenants;
 use App\Http\Controllers\Controller;
 use App\Models\Tenants\Attendance;
 use App\Models\Tenants\Employee;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Validation\ValidationException;
