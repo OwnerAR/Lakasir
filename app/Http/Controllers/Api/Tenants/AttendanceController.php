@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Http\Controllers\Api\Tenants;
 
 use App\Http\Controllers\Controller;
 use App\Models\Tenants\Attendance;
@@ -109,14 +109,13 @@ class AttendanceController extends Controller
             'success' => false,
             'message' => 'Invalid request',
             'errors' => $e->errors(),
-            ], 404);
+            ], 422);
         }
         $whatsappId = trim(str_replace('@s.whatsapp.net', '', strtolower($request->input('participant'))));
         if (Redis::get('whatsapp:ignore_self:' . $whatsappId) || $request->input('fromMe')) {
             return response()->json([
                 'success' => false,
-                'message' => __('Message already processed or ignored'),
-            ], 500);
+            ], 400);
         }
 
         $employee = Employee::where('whatsapp_id', $whatsappId)->first();

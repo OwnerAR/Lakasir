@@ -25,8 +25,6 @@ class ApiKeyMiddleware
         if (!$user) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
-        // Optionally, set user to request for further use
-        $request->merge(['api_user' => $user]);
         return $next($request);
     }
 }

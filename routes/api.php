@@ -2,16 +2,12 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\RegisteredUserController;
-use App\Http\Controllers\Api\AttendanceController;
 
 Route::group(['prefix' => 'domain'], function ()
 {
     Route::post('/register', RegisteredUserController::class)
         ->name('register');
 });
-
-Route::post('/attendance', [AttendanceController::class, 'storeAttendance'])
-    ->middleware(['bot.api']);
 
 Route::get('/test', function ()
 {
