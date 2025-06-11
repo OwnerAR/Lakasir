@@ -207,6 +207,7 @@ Route::middleware([
             });
 
         });
+        
         Route::post('/attendance', [AttendanceController::class, 'storeAttendance'])
             ->middleware('bot.api');
 
