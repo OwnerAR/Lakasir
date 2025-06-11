@@ -15,9 +15,9 @@ jobs:
         image: mysql:5.7
         env:
           MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: test
+          MYSQL_DATABASE: testing
           MYSQL_USER: test
-          MYSQL_PASSWORD: yourpassword
+          MYSQL_PASSWORD: test
         ports:
           - 3306:3306
         options: >-
@@ -39,18 +39,32 @@ jobs:
           extensions: mbstring, xml, bcmath, redis, pdo_mysql
           coverage: none
 
-      - name: Install Composer dependencies
-        run: composer install --prefer-dist --no-interaction --no-progress
-
-      - name: Generate key
-        run: php artisan key:generate
-
       - name: Wait for MySQL
         run: |
           until mysql -h 127.0.0.1 -u test -ptest -e "SHOW DATABASES"; do
             sleep 1
           done
+      - name: Grant ALL PRIVILEGES to test user
+        run: |
+          mysql -h 127.0.0.1 -u root -proot -e "GRANT ALL PRIVILEGES ON *.* TO 'test'@'%'; FLUSH PRIVILEGES;"
 
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+      
+      - name: Generate key
+        run: php artisan key:generate
+        
+      - name: Show .env and APP_KEY
+        run: cat .env && php -r "echo getenv('APP_KEY');"
+      
+      - name: Clear config cache
+        run: php artisan config:clear
+      - name: Cache config
+        run: php artisan config:cache
+      - name: Clear route cache
+        run: php artisan route:clear
+      - name: Clear view cache
+        run: php artisan view:clear
       - name: Run migrations
         run: php artisan migrate --force
 

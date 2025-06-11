@@ -63,7 +63,7 @@ class AttendanceController extends Controller
             ]));
             return response()->json([
                 'success' => true,
-                'data'    => $attendance,
+                'message'    => 'attendance in successfully',
             ]);
         }
 
@@ -87,7 +87,7 @@ class AttendanceController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data'    => $attendance,
+                'message' => 'attendance out successfully',
             ]);
         }
         return response()->json([
