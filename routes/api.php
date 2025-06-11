@@ -2,7 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\RegisteredUserController;
-use App\Http\Controllers\AttendanceController;
+use App\Http\Controllers\Api\AttendanceController;
 
 Route::group(['prefix' => 'domain'], function ()
 {
