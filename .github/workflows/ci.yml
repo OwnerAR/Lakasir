@@ -50,12 +50,12 @@ jobs:
 
       - name: Install Composer dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
-
-      - name: Run migrations
-        run: php artisan migrate --force
-
+      
       - name: Generate key
         run: php artisan key:generate
+        
+      - name: Run migrations
+        run: php artisan migrate --force
 
       - name: Run tests
         run: php artisan test
