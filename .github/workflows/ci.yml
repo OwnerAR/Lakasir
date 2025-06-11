@@ -59,7 +59,12 @@ jobs:
       
       - name: Clear config cache
         run: php artisan config:clear
-
+      - name: Cache config
+        run: php artisan config:cache
+      - name: Clear route cache
+        run: php artisan route:clear
+      - name: Clear view cache
+        run: php artisan view:clear
       - name: Run migrations
         run: php artisan migrate --force
 
