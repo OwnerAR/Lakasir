@@ -54,6 +54,9 @@ jobs:
       - name: Generate key
         run: php artisan key:generate
         
+      - name: Show .env and APP_KEY
+        run: cat .env && php -r "echo getenv('APP_KEY');"
+        
       - name: Run migrations
         run: php artisan migrate --force
 
