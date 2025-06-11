@@ -56,7 +56,10 @@ jobs:
         
       - name: Show .env and APP_KEY
         run: cat .env && php -r "echo getenv('APP_KEY');"
-        
+      
+      - name: Clear config cache
+        run: php artisan config:clear
+
       - name: Run migrations
         run: php artisan migrate --force
 
