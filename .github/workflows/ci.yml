@@ -49,7 +49,7 @@ jobs:
         run: composer install --prefer-dist --no-interaction --no-progress
 
       - name: Run migrations
-        run: php artisan migrate --force --path=database/migrations/tenant
+        run: php artisan migrate --force
 
       - name: Generate key
         run: php artisan key:generate
