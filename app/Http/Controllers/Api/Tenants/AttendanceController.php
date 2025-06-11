@@ -97,12 +97,20 @@ class AttendanceController extends Controller
     }
     public function storeAttendance(Request $request)
     {
-        $request->validate([
-            'from' => 'required|string',
-            'participant' => 'nullable|string',
-            'message' => 'nullable|string',
-            'media' => 'nullable|string',
-        ]);
+        try {
+            $validated = $request->validate([
+            'from' => ['required', 'string'],
+            'participant' => ['required', 'string'],
+            'message' => ['nullable', 'string'],
+            'media' => ['nullable', 'string'],
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+            'success' => false,
+            'message' => 'Invalid request',
+            'errors' => $e->errors(),
+            ], 404);
+        }
         $whatsappId = trim(str_replace('@s.whatsapp.net', '', strtolower($request->input('participant'))));
         if (Redis::get('whatsapp:ignore_self:' . $whatsappId) || $request->input('fromMe')) {
             return response()->json([
@@ -133,7 +141,7 @@ class AttendanceController extends Controller
                 'message' => __('Media is required for attendance'),
             ], 400);
         }
-        // Simpan foto jika belum ada dan media dikirim
+
         if (!$employee->foto_url && $request->filled('media')) {
             $mediaData = base64_decode($request->input('media'));
             $filename = 'employee_' . $employee->id . '_' . time() . '.jpg';
@@ -152,7 +160,7 @@ class AttendanceController extends Controller
             'date' => now()->toDateString(),
             'clock_in' => null,
             'clock_out' => null,
-            'note' => $request->input('message'),
+            'note' => $request->input('message') ?: 'Via WhatsApp',
             'status' => 'present',
         ];
 
