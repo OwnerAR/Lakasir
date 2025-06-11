@@ -82,6 +82,11 @@ class EmployeeResource extends Resource
     {
         return $table
             ->columns([
+                TextColumn::make('id')
+                    ->label(__('ID'))
+                    ->sortable()
+                    ->searchable()
+                    ->translateLabel(),
                 Tables\Columns\TextColumn::make('employee_id')
                     ->label(__('Employee ID'))
                     ->searchable()

@@ -22,7 +22,6 @@ class WeeklyPayrollRecap extends Command
         foreach ($employees as $employee) {
             $workDays = Attendance::where('employee_id', $employee->id)
                 ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
-                ->where('status', 'present')
                 ->count();
 
             if ($workDays > 0) {
