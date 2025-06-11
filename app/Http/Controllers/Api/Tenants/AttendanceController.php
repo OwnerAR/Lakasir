@@ -104,23 +104,14 @@ class AttendanceController extends Controller
             'media' => 'nullable|string',
         ]);
         $whatsappId = trim(str_replace('@s.whatsapp.net', '', strtolower($request->input('participant'))));
-        if (Redis::get('whatsapp:ignore_self:' . $whatsappId)) {
+        if (Redis::get('whatsapp:ignore_self:' . $whatsappId) || $request->input('fromMe')) {
             return response()->json([
                 'success' => false,
                 'message' => __('Message already processed or ignored'),
             ], 500);
         }
 
-        if ($request->input('fromMe')) {
-            Redis::set('whatsapp:ignore_self:' . $whatsappId, true, 'EX', 300);
-            return response()->json([
-                'success' => false,
-                'message' => __('Cannot process message from self'),
-            ], 400);
-        }
-
         $employee = Employee::where('whatsapp_id', $whatsappId)->first();
-
         if (!$employee) {
             Redis::set('whatsapp:ignore_self:' . $whatsappId, true, 'EX', 300);
             return response()->json([
