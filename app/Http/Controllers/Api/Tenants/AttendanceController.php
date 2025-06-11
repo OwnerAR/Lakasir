@@ -12,23 +12,23 @@ use Illuminate\Validation\ValidationException;
 
 class AttendanceController extends Controller
 {
-    private function store($data)
+    private function store(array $data)
     {
-        try {
-            $validated = $data->validate([
-                'whatsapp_id' => 'required|exists:employees,whatsapp_id',
-                'date' => 'required|date',
-                'clock_in' => 'required_without:clock_out|nullable|date_format:H:i',
-                'clock_out' => 'required_without:clock_in|nullable|date_format:H:i|after:clock_in',
-                'status' => 'required|string',
-                'note' => 'nullable|string|max:255',
-            ]);
-        } catch (ValidationException $e) {
+        $validator = \Validator::make($data, [
+            'whatsapp_id' => 'required|exists:employees,whatsapp_id',
+            'date' => 'required|date',
+            'clock_in' => 'required_without:clock_out|nullable|date_format:H:i',
+            'clock_out' => 'required_without:clock_in|nullable|date_format:H:i|after:clock_in',
+            'status' => 'required|string',
+            'note' => 'nullable|string|max:255',
+        ]);
+        if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'errors' => $e->errors(),
+                'errors' => $validator->errors(),
             ], 422);
         }
+        $validated = $validator->validated();
         $employee = Employee::where('whatsapp_id', $validated['whatsapp_id'])->first();
         $attendanceToday = Attendance::where('employee_id', $employee->id)
             ->whereDate('created_at', now()->toDateString())
@@ -175,7 +175,6 @@ class AttendanceController extends Controller
             Redis::del($redisKey); // hapus session setelah clock out
         }
 
-        $attendanceRequest = new Request($data);
-        return $this->store($attendanceRequest);
+        return $this->store($data);
     }
 }
