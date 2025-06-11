@@ -60,8 +60,6 @@ Route::middleware([
 
 Route::middleware([
     'api',
-    InitializeTenancyByDomain::class,
-    PreventAccessFromCentralDomains::class,
 ])
     ->prefix('api')
     ->group(function () {
