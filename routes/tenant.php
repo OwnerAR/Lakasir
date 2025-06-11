@@ -209,7 +209,7 @@ Route::middleware([
         });
         
         Route::post('/attendance', [AttendanceController::class, 'storeAttendance'])
-            ->middleware('bot.api');
+            ->middleware(['bot.api']);
 
         Route::get('/', function () {
             return ['Laravel' => app()->version()];
