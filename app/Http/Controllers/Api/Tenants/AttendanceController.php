@@ -115,6 +115,9 @@ class AttendanceController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => __('Invalid sender'),
+                'errors' => [
+                    'from' => $request->input('from') . ' is not allowed',
+                ],
             ], 400);
         }
         $whatsappId = trim(str_replace('@s.whatsapp.net', '', strtolower($request->input('participant'))));
