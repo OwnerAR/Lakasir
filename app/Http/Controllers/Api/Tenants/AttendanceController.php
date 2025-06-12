@@ -111,6 +111,12 @@ class AttendanceController extends Controller
             'errors' => $e->errors(),
             ], 422);
         }
+        if ($request->input('from') !== config('app.whatsapp_id')) {
+            return response()->json([
+                'success' => false,
+                'message' => __('Invalid sender'),
+            ], 400);
+        }
         $whatsappId = trim(str_replace('@s.whatsapp.net', '', strtolower($request->input('participant'))));
         if (Redis::get('whatsapp:ignore_self:' . $whatsappId) || $request->input('fromMe')) {
             return response()->json([
