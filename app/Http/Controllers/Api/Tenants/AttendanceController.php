@@ -38,7 +38,7 @@ class AttendanceController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => __('Attendance already exists for today'),
-                ], 403);
+                ], 200);
             }
         }
         if (!empty($validated['clock_in'])) {
@@ -55,7 +55,7 @@ class AttendanceController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => __('Sorry, you are not allowed to clock in at this time. Your shift is ' . $employee->shift),
-                ], 403);
+                ], 200);
             }
             $attendance = Attendance::create(array_merge($validated, [
                 'employee_id' => $employee->id,
@@ -78,7 +78,7 @@ class AttendanceController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => __('No attendance record found for clock out'),
-                ], 404);
+                ], 200);
             }
 
             $attendance->clock_out = $validated['clock_out'];
@@ -93,7 +93,7 @@ class AttendanceController extends Controller
         return response()->json([
             'success' => false,
             'message' => __('Invalid request, clock_in or clock_out is required'),
-        ], 500);
+        ], 200);
     }
     public function storeAttendance(Request $request)
     {
@@ -124,21 +124,21 @@ class AttendanceController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => __('Employee not found'),
-            ], 404);
+            ], 200);
         }
         if (!$employee->is_active) {
             Redis::set('whatsapp:ignore_self:' . $whatsappId, true, 'EX', 300);
             return response()->json([
                 'success' => false,
                 'message' => __('Employee is not active'),
-            ], 403);
+            ], 200);
         }
         if (!$request->filled('media')) {
             Redis::set('whatsapp:ignore_self:' . $whatsappId, true, 'EX', 300);
             return response()->json([
                 'success' => false,
                 'message' => __('Media is required for attendance'),
-            ], 400);
+            ], 200);
         }
 
         if (!$employee->foto_url && $request->filled('media')) {
