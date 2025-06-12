@@ -220,4 +220,5 @@ return [
     'aliases' => Facade::defaultAliases()->merge([
         // 'ExampleClass' => App\Example\ExampleClass::class,
     ])->toArray(),
+    'whatsapp_id' => env('WHATSAPP_ID', '1234567890'),
 ];
