@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Log;
 
 class AttendanceController extends Controller
 {
@@ -112,6 +113,10 @@ class AttendanceController extends Controller
             ], 422);
         }
         if ($request->input('from') !== config('app.whatsapp_id')) {
+            Log::error('Invalid sender', [
+                'from' => $request->input('from'),
+                'expected' => config('app.whatsapp_id'),
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => __('Invalid sender'),
