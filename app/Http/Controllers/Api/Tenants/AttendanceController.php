@@ -5,11 +5,14 @@ namespace App\Http\Controllers\Api\Tenants;
 use App\Http\Controllers\Controller;
 use App\Models\Tenants\Attendance;
 use App\Models\Tenants\Employee;
+use App\Models\Tenants\WorkSchedule;
+use App\Models\Tenants\Shift;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 
 class AttendanceController extends Controller
 {
@@ -20,7 +23,7 @@ class AttendanceController extends Controller
             'date' => 'required|date',
             'clock_in' => 'required_without:clock_out|nullable|date_format:H:i',
             'clock_out' => 'required_without:clock_in|nullable|date_format:H:i|after:clock_in',
-            'status' => 'required|string',
+            'status' => 'nullable|string',
             'note' => 'nullable|string|max:255',
         ]);
         if ($validator->fails()) {
@@ -44,27 +47,84 @@ class AttendanceController extends Controller
         }
         if (!empty($validated['clock_in'])) {
             $clockIn = $validated['clock_in'];
-            $shift = null;
-            if ($clockIn >= '06:00' && $clockIn <= '08:00') {
-                $shift = 'pagi';
-            } elseif ($clockIn >= '17:00' && $clockIn <= '19:00') {
-                $shift = 'sore';
-            } elseif ($clockIn >= '21:00' && $clockIn <= '23:00') {
-                $shift = 'malam';
-            }
-            if (strtolower($employee->shift) !== $shift) {
+            
+            $workSchedule = WorkSchedule::where('employee_id', $employee->id)
+                ->whereDate('date', now()->toDateString())
+                ->first();
+
+            if (!$workSchedule) {
                 return response()->json([
                     'success' => false,
-                    'message' => __('Sorry, you are not allowed to clock in at this time. Your shift is ' . $employee->shift),
+                    'message' => __('You do not have any scheduled shift today.'),
                 ], 200);
             }
-            $attendance = Attendance::create(array_merge($validated, [
+            
+            $scheduledShift = Shift::find($workSchedule->shift_id);
+            if (!$scheduledShift) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('Scheduled shift not found. Please contact HR department.'),
+                ], 200);
+            }
+            
+            $shiftStart = Carbon::parse($scheduledShift->start_time);
+            $toleranceLimit = $shiftStart->copy()->addMinutes(15);
+            $clockInTime = Carbon::parse($clockIn);
+            
+            $isClockInMatchShift = false;
+            $isLate = false;
+            
+            if ($scheduledShift->start_time <= $scheduledShift->end_time) {
+                if ($clockIn >= $scheduledShift->start_time && $clockIn <= $scheduledShift->end_time) {
+                    $isClockInMatchShift = true;
+                    if ($clockIn > $scheduledShift->start_time && 
+                        $clockInTime->lte($toleranceLimit)) {
+                        $isLate = true;
+                    }
+                }
+            } 
+            else {
+                if ($clockIn >= $scheduledShift->start_time || $clockIn <= $scheduledShift->end_time) {
+                    $isClockInMatchShift = true;
+                    if ($clockIn > $scheduledShift->start_time && 
+                        $clockInTime->lte($toleranceLimit)) {
+                        $isLate = true;
+                    }
+                }
+            }
+            
+            if (!$isClockInMatchShift && $clockInTime->lte($toleranceLimit)) {
+                $isClockInMatchShift = true;
+                $isLate = true;
+            }
+            
+            if (!$isClockInMatchShift) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __("Sorry, you are not allowed to clock in at this time. Your scheduled shift is {$scheduledShift->name} ({$scheduledShift->start_time}-{$scheduledShift->end_time})"),
+                ], 200);
+            }
+            
+            $attendanceData = array_merge($validated, [
                 'employee_id' => $employee->id,
-                'shift' => $shift,
-            ]));
+                'shift' => $scheduledShift->name,
+                'shift_id' => $scheduledShift->id,
+            ]);
+            
+            if ($isLate) {
+                $attendanceData['status'] = 'late';
+                $attendanceData['note'] = ($validated['note'] ?? '') . ' (Terlambat ' . 
+                    Carbon::parse($clockIn)->diffInMinutes($shiftStart) . 
+                    ' menit)';
+            }
+            
+            $attendance = Attendance::create($attendanceData);
+            
             return response()->json([
                 'success' => true,
-                'message'    => 'attendance in successfully',
+                'message' => $isLate ? 
+                    'Attendance recorded successfully. You are late.' :
+                    'Attendance recorded successfully.',
             ]);
         }
 
@@ -172,17 +232,17 @@ class AttendanceController extends Controller
             'clock_in' => null,
             'clock_out' => null,
             'note' => $request->input('message') ?: 'Via WhatsApp',
-            'status' => 'present',
+            'status' => null,
         ];
 
         if (!$session) {
             // Clock in
             $data['clock_in'] = now()->format('H:i');
-            Redis::set($redisKey, 'clocked_in');
+            Redis::set($redisKey, 'clocked_in', 'EX', 86400);
         } else {
             // Clock out
             $data['clock_out'] = now()->format('H:i');
-            Redis::del($redisKey); // hapus session setelah clock out
+            Redis::del($redisKey);
         }
 
         return $this->store($data);
