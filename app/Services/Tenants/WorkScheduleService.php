@@ -8,6 +8,8 @@ use App\Models\Tenants\WorkSchedule;
 use App\Services\WhatsappService;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class WorkScheduleService
 {
@@ -16,16 +18,20 @@ class WorkScheduleService
     private ?int $offShiftId = null;
     private array $shiftGroups = [];
     private WhatsappService $whatsappService;
-
+    
+    /**
+     * Inisialisasi service dengan dependencies yang diperlukan
+     */
     public function __construct(WhatsappService $whatsappService)
     {
         $this->whatsappService = $whatsappService;
 
-        $offShift = Shift::where('name', 'like', '%off%')
-            ->orWhere('name', 'like', '%libur%')
-            ->orWhere('name', 'like', '%rest%')
-            ->orWhere('name', 'like', '%free%')
-            ->first();
+        $offShift = Shift::where(function($query) {
+            $query->where('name', 'like', '%off%')
+                ->orWhere('name', 'like', '%libur%')
+                ->orWhere('name', 'like', '%rest%')
+                ->orWhere('name', 'like', '%free%');
+        })->first();
             
         if ($offShift) {
             $this->offShiftId = $offShift->id;
@@ -34,24 +40,20 @@ class WorkScheduleService
                 $newOffShift = Shift::create([
                     'name' => 'Off Day',
                     'start_time' => '00:00:00',
-                    'end_time' => '00:00:00'
+                    'end_time' => '23:59:00'
                 ]);
                 $this->offShiftId = $newOffShift->id;
             } catch (\Exception $e) {
+                Log::error("Failed to create off day shift: " . $e->getMessage());
                 $this->offShiftId = Shift::first()->id ?? null;
             }
         }
         
-
         $this->initializeShiftGroups();
     }
 
     /**
      * Send WhatsApp notifications with detailed schedules for each week
-     *
-     * @param Carbon $startDate
-     * @param int $weeks
-     * @return void
      */
     private function sendScheduleNotification(Carbon $startDate, int $weeks): void
     {
@@ -107,10 +109,14 @@ class WorkScheduleService
             
             $message .= "Mohon periksa jadwal Anda dan konfirmasi kehadiran.\nRegarding any issues, please contact the HR department.\n\n";
             
-            $this->whatsappService->sendMessage(config('app.whatsapp_id'), $message);
-            
-            if ($week < $weeks - 1) {
-                sleep(1);
+            try {
+                $this->whatsappService->sendMessage(config('app.whatsapp_id'), $message);
+                
+                if ($week < $weeks - 1) {
+                    sleep(1);
+                }
+            } catch (\Exception $e) {
+                Log::error("Failed to send WhatsApp notification: " . $e->getMessage());
             }
         }
     }
@@ -122,7 +128,6 @@ class WorkScheduleService
     private function initializeShiftGroups(): void
     {
         $this->shiftGroups = [];
-        
 
         $shifts = Shift::when($this->offShiftId, function ($query) {
             return $query->where('id', '!=', $this->offShiftId);
@@ -131,25 +136,28 @@ class WorkScheduleService
         if ($shifts->isEmpty()) {
             return;
         }
-        
 
         $morningShifts = [];
         $afternoonShifts = [];
         $nightShifts = [];
         
         foreach ($shifts as $shift) {
-            $startTime = Carbon::parse($shift->start_time);
-            $hour = (int) $startTime->format('H');
-            
-            if ($hour >= 6 && $hour < 12) {
-                $morningShifts[] = $shift->id;
-            } elseif ($hour >= 12 && $hour < 18) {
-                $afternoonShifts[] = $shift->id;
-            } else {
+            try {
+                $startTime = Carbon::parse($shift->start_time);
+                $hour = (int) $startTime->format('H');
+                
+                if ($hour >= 5 && $hour < 12) {
+                    $morningShifts[] = $shift->id;
+                } elseif ($hour >= 12 && $hour < 18) {
+                    $afternoonShifts[] = $shift->id;
+                } else {
+                    $nightShifts[] = $shift->id;
+                }
+            } catch (\Exception $e) {
+                Log::warning("Invalid time format for shift ID {$shift->id}: {$e->getMessage()}");
                 $nightShifts[] = $shift->id;
             }
         }
-        
 
         $groupIndex = 1;
         
@@ -166,269 +174,466 @@ class WorkScheduleService
         }
         
         if (empty($this->shiftGroups)) {
-            foreach ($shifts as $shift) {
-                $groupId = ($shift->id % count($shifts)) + 1;
-                if (!isset($this->shiftGroups[$groupId])) {
-                    $this->shiftGroups[$groupId] = [];
-                }
-                $this->shiftGroups[$groupId][] = $shift->id;
-            }
+            $this->createFallbackShiftGroups($shifts);
         }
-    }
-
-        /**
-     * Generate jadwal untuk periode tertentu
-     *
-     * @param Carbon $startDate
-     * @param int $weeks
-     * @return bool
-     */
-    public function generateSchedule(Carbon $startDate, int $weeks = 4): bool
-    {
-
-        $employees = Employee::all();
-        $shifts = Shift::all();
-        
-        if ($employees->count() < 2 || $shifts->count() < 2) {
-            return false;
-        }
-
-
-        $this->initializeLastShifts($employees, $startDate);
-        
-
-        $employeeGroups = $this->divideEmployeesIntoGroups($employees);
-        $this->employeeRestDays = [];
-        
-
-        $currentDate = $startDate->copy();
-        
-        for ($week = 0; $week < $weeks; $week++) {
-
-            $this->generateWeeklySchedule($currentDate, $employeeGroups, $shifts);
-            
-
-            $this->addDistributedRestDays($currentDate, $employeeGroups);
-            
-
-            if ($week < $weeks - 1) {
-                $employeeGroups = $this->rotateEmployeesAfterRest($employeeGroups, $currentDate);
-            }
-            
-            $currentDate->addWeek();
-        }
-        $this->sendScheduleNotification($startDate, $weeks);
-        
-        return true;
     }
 
     /**
-     * Inisialisasi tracking shift terakhir semua karyawan
+     * Membuat grup shift fallback ketika shift standar tidak ditemukan
      */
-    private function initializeLastShifts(Collection $employees, Carbon $startDate): void
+    private function createFallbackShiftGroups($shifts): void
     {
-        foreach ($employees as $employee) {
-            // Cek jadwal terakhir sebelum tanggal mulai
-            $lastSchedule = WorkSchedule::where('employee_id', $employee->id)
-                ->where('date', '<', $startDate->format('Y-m-d'))
-                ->orderBy('date', 'desc')
-                ->first();
+        if ($shifts->isEmpty()) {
+            return;
+        }
+        
+        $shiftsCount = $shifts->count();
+        $optimalGroupCount = min(3, max(1, ceil($shiftsCount / 2)));
+        
+        for ($i = 1; $i <= $optimalGroupCount; $i++) {
+            $this->shiftGroups[$i] = [];
+        }
+        
+        foreach ($shifts as $index => $shift) {
+            $groupId = ($index % $optimalGroupCount) + 1;
+            $this->shiftGroups[$groupId][] = $shift->id;
+        }
+    }
+
+    /**
+     * Generate jadwal untuk periode tertentu
+     */
+    public function generateSchedule(Carbon $startDate, int $weeks = 4): bool
+    {
+        try {
+            // Mengambil hanya karyawan non-admin
+            $employees = Employee::where('is_active', true)
+                ->where('is_admin', false)
+                ->get();
+                
+            $shifts = Shift::all();
             
-            if ($lastSchedule) {
-                $lastDate = Carbon::parse($lastSchedule->date);
-                $this->lastEmployeeShifts[$employee->id] = [
-                    'shift_id' => $lastSchedule->shift_id,
-                    'date' => $lastDate,
-                ];
-            } else {
-                $this->lastEmployeeShifts[$employee->id] = [
-                    'shift_id' => null,
-                    'date' => null,
-                ];
+            if ($employees->count() < 2 || $shifts->count() < 2) {
+                Log::warning("Not enough employees or shifts to generate schedule");
+                return false;
+            }
+
+            DB::beginTransaction();
+
+            // Inisialisasi data untuk tracking
+            $this->initializeLastShifts($employees, $startDate);
+            $employeeGroups = $this->divideEmployeesIntoGroups($employees);
+            $this->employeeRestDays = [];
+            
+            $currentDate = $startDate->copy();
+            
+            // Generate jadwal untuk setiap minggu
+            for ($week = 0; $week < $weeks; $week++) {
+                $this->generateWeeklySchedule($currentDate, $employeeGroups, $shifts);
+                $this->addDistributedRestDays($currentDate, $employeeGroups);
+
+                if ($week < $weeks - 1) {
+                    $employeeGroups = $this->rotateEmployeesAfterRest($employeeGroups, $currentDate);
+                }
+                
+                // Pastikan shift Admin hanya untuk karyawan admin
+                $this->ensureAdminShiftsForAdminsOnly($currentDate);
+                
+                // Pastikan semua shift memiliki minimal satu karyawan setiap hari
+                $this->ensureMinimumWorkersPerShift($currentDate, $employeeGroups);
+                
+                $currentDate->addWeek();
+            }
+            
+            DB::commit();
+            
+            $this->sendScheduleNotification($startDate, $weeks);
+            return true;
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Error generating schedule: " . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Verifikasi bahwa shift Admin hanya diberikan ke karyawan Admin
+     */
+    private function ensureAdminShiftsForAdminsOnly(Carbon $startDate): void
+    {
+        // Identifikasi shift admin berdasarkan nama
+        $adminShifts = Shift::where('name', 'like', '%admin%')->pluck('id')->toArray();
+        
+        if (empty($adminShifts)) {
+            return;
+        }
+        
+        // Cari jadwal yang memberikan shift admin ke non-admin
+        $wrongAssignments = WorkSchedule::whereBetween('date', [
+                $startDate->format('Y-m-d'),
+                $startDate->copy()->addDays(6)->format('Y-m-d')
+            ])
+            ->whereIn('shift_id', $adminShifts)
+            ->whereHas('employee', function($query) {
+                $query->where('is_admin', false);
+            })
+            ->with('employee')
+            ->get();
+        
+        foreach ($wrongAssignments as $assignment) {
+            // Jika ada non-admin yang terjadwal di shift admin, ganti dengan shift lain
+            $alternativeShift = $this->findAlternativeShiftForEmployee(
+                $assignment->employee_id,
+                $adminShifts,
+                Carbon::parse($assignment->date)
+            );
+            
+            if ($alternativeShift) {
+                $assignment->update([
+                    'shift_id' => $alternativeShift
+                ]);
+                
+                Log::info("Fixed admin shift assignment for non-admin employee #{$assignment->employee_id} on {$assignment->date}");
             }
         }
     }
     
     /**
+     * Mencari shift alternatif yang sesuai untuk karyawan
+     */
+    private function findAlternativeShiftForEmployee(int $employeeId, array $excludeShiftIds, Carbon $date): ?int
+    {
+        // Cari shift dari grup yang sama, tapi bukan admin
+        $employeeGroup = $this->getEmployeeGroup($employeeId);
+        
+        if ($employeeGroup && isset($this->shiftGroups[$employeeGroup])) {
+            foreach ($this->shiftGroups[$employeeGroup] as $shiftId) {
+                if (!in_array($shiftId, $excludeShiftIds)) {
+                    return $shiftId;
+                }
+            }
+        }
+        
+        // Jika tidak ditemukan, cari shift apapun yang bukan admin atau libur
+        $alternativeShift = Shift::whereNotIn('id', $excludeShiftIds)
+            ->when($this->offShiftId, function($query) {
+                return $query->where('id', '!=', $this->offShiftId);
+            })
+            ->first();
+            
+        return $alternativeShift ? $alternativeShift->id : $this->offShiftId;
+    }
+    
+    /**
+     * Menentukan grup dari karyawan berdasarkan jadwal yang ada
+     */
+    private function getEmployeeGroup(int $employeeId): ?int
+    {
+        foreach ($this->shiftGroups as $groupId => $shiftIds) {
+            $lastWorkSchedule = WorkSchedule::where('employee_id', $employeeId)
+                ->whereIn('shift_id', $shiftIds)
+                ->orderBy('date', 'desc')
+                ->first();
+                
+            if ($lastWorkSchedule) {
+                return $groupId;
+            }
+        }
+        
+        return null;
+    }
+
+    /**
+     * Inisialisasi tracking shift terakhir untuk semua karyawan
+     */
+    private function initializeLastShifts(Collection $employees, Carbon $startDate): void
+    {
+        // Ekstrak semua ID karyawan
+        $employeeIds = $employees->pluck('id')->toArray();
+        
+        // Ambil jadwal terakhir untuk semua karyawan dalam satu query
+        $lastSchedules = WorkSchedule::whereIn('employee_id', $employeeIds)
+            ->where('date', '<', $startDate->format('Y-m-d'))
+            ->select('employee_id', 'shift_id', 'date')
+            ->orderBy('date', 'desc')
+            ->get()
+            ->groupBy('employee_id')
+            ->map(function ($items) {
+                return $items->first();
+            });
+        
+        foreach ($employees as $employee) {
+            $lastSchedule = $lastSchedules->get($employee->id);
+            
+            $this->lastEmployeeShifts[$employee->id] = [
+                'shift_id' => $lastSchedule->shift_id ?? null,
+                'date' => $lastSchedule ? Carbon::parse($lastSchedule->date) : null,
+            ];
+        }
+    }
+    
+    /**
      * Membagi karyawan ke dalam grup shift dengan memperhatikan kepadatan shift
-     * Group 1 (shift siang) harus memiliki jumlah karyawan >= Group 2 (shift malam)
+     * Group 1 (shift pagi) harus memiliki jumlah karyawan >= Group 2 (shift malam)
      */
     private function divideEmployeesIntoGroups(Collection $employees): array
     {
         $groups = [];
+        $totalEmployees = $employees->count();
         
+        // Inisialisasi grup
         foreach (array_keys($this->shiftGroups) as $groupId) {
             $groups[$groupId] = [];
         }
         
         if (empty($groups)) {
-            $groups[1] = array_fill(0, $employees->count(), null);
+            $groups[1] = [];
             return $groups;
         }
         
-        $totalEmployees = $employees->count();
         $totalGroups = count($groups);
-        
         $isTwoShiftPattern = $totalGroups === 2;
+        $firstGroupHasPriority = $isTwoShiftPattern && $this->firstGroupRequiresMoreStaff();
         
-        $firstGroupHasPriority = false;
-        if ($isTwoShiftPattern) {
-            $firstGroupHasPriority = $this->firstGroupRequiresMoreStaff();
+        // Hitung rasio distribusi
+        list($groupDistribution, $minGroup1, $maxGroup2) = $this->calculateGroupDistribution(
+            $totalEmployees, 
+            $totalGroups, 
+            $isTwoShiftPattern, 
+            $firstGroupHasPriority
+        );
+        
+        // Tetapkan karyawan non-rotatable ke grup preferensi mereka
+        $assignedEmployees = $this->assignNonRotatableEmployees($employees, $groups);
+        $groupCounts = $this->countEmployeesPerGroup($groups);
+        
+        // Sesuaikan jika diperlukan untuk pola dua shift
+        if ($isTwoShiftPattern && $firstGroupHasPriority) {
+            $this->balanceFirstTwoGroups($groups, $groupCounts, $maxGroup2);
         }
         
+        // Tetapkan karyawan rotatable yang tersisa
+        $this->assignRotatableEmployees($employees, $groups, $groupCounts, $isTwoShiftPattern, $firstGroupHasPriority, $maxGroup2);
+        
+        // Pastikan tidak ada grup kosong jika memungkinkan
+        $this->ensureNoEmptyGroups($groups, $groupCounts, $totalEmployees);
+        
+        return $groups;
+    }
+
+    /**
+     * Hitung distribusi optimal karyawan di seluruh grup
+     */
+    private function calculateGroupDistribution(int $totalEmployees, int $totalGroups, bool $isTwoShiftPattern, bool $firstGroupHasPriority): array
+    {
+        $groupDistribution = [];
+        
         if ($isTwoShiftPattern && $firstGroupHasPriority) {
-            $group1Ratio = 0.6;
-            $group2Ratio = 0.4;
+            // Untuk shift pagi/malam dengan prioritas shift pagi:
+            // 65% karyawan di shift pagi, 35% di shift malam
+            $group1Ratio = 0.65;
+            $group2Ratio = 0.35;
             
             $minGroup1 = max(2, ceil($totalEmployees * $group1Ratio));
             $maxGroup2 = min(floor($totalEmployees * $group2Ratio), $totalEmployees - $minGroup1);
         } else {
-            $employeesPerGroup = ceil($totalEmployees / $totalGroups);
-            $minGroup1 = $employeesPerGroup;
-            $maxGroup2 = $employeesPerGroup;
+            // Distribusikan karyawan secara merata
+            $baseEmployeesPerGroup = floor($totalEmployees / $totalGroups);
+            $remainingEmployees = $totalEmployees % $totalGroups;
+            
+            for ($i = 1; $i <= $totalGroups; $i++) {
+                $groupDistribution[$i] = $baseEmployeesPerGroup + ($i <= $remainingEmployees ? 1 : 0);
+            }
+            
+            $minGroup1 = $groupDistribution[1] ?? $baseEmployeesPerGroup;
+            $maxGroup2 = $groupDistribution[2] ?? $baseEmployeesPerGroup;
         }
         
+        return [$groupDistribution, $minGroup1, $maxGroup2];
+    }
+
+    /**
+     * Tetapkan karyawan non-rotatable ke grup preferensi mereka
+     */
+    private function assignNonRotatableEmployees(Collection $employees, array &$groups): int
+    {
         $assignedEmployees = 0;
-        $groupCounts = array_fill(1, $totalGroups, 0);
         
         foreach ($employees as $employee) {
             if (!$employee->rotated && $employee->shift_id) {
                 $groupId = $this->getShiftGroupId($employee->shift_id);
                 if (isset($groups[$groupId])) {
                     $groups[$groupId][] = $employee->id;
-                    $groupCounts[$groupId]++;
                     $assignedEmployees++;
                 }
             }
         }
         
-        if ($isTwoShiftPattern && $firstGroupHasPriority && $groupCounts[2] > $maxGroup2) {
-            $excessCount = $groupCounts[2] - $maxGroup2;
-            
-            $movedCount = 0;
-            $employeesToMove = [];
-            
-            foreach ($employees as $employee) {
-                if (!$employee->rotated && $employee->shift_id) {
-                    $groupId = $this->getShiftGroupId($employee->shift_id);
-                    if ($groupId == 2 && $movedCount < $excessCount) {
-                        $employeesToMove[] = $employee->id;
-                        $movedCount++;
-                    }
-                }
-            }
-            
-            foreach ($employeesToMove as $employeeId) {
-                $index = array_search($employeeId, $groups[2]);
-                if ($index !== false) {
-                    unset($groups[2][$index]);
-                    $groups[1][] = $employeeId;
-                    $groupCounts[2]--;
-                    $groupCounts[1]++;
-                }
-            }
+        return $assignedEmployees;
+    }
+
+    /**
+     * Hitung karyawan di setiap grup
+     */
+    private function countEmployeesPerGroup(array $groups): array
+    {
+        $counts = [];
+        foreach ($groups as $groupId => $employeeIds) {
+            $counts[$groupId] = count($employeeIds);
+        }
+        return $counts;
+    }
+
+    /**
+     * Seimbangkan dua grup pertama ketika grup pertama membutuhkan prioritas
+     */
+    private function balanceFirstTwoGroups(array &$groups, array &$groupCounts, int $maxGroup2): void
+    {
+        if (!isset($groups[2]) || !isset($groupCounts[2])) {
+            return;
         }
         
-        $rotatableEmployees = [];
-        foreach ($employees as $employee) {
-            if ($employee->rotated || !$employee->shift_id) {
-                $rotatableEmployees[] = $employee->id;
+        // Pastikan shift malam tidak memiliki lebih banyak staff dari shift pagi
+        if ($groupCounts[1] <= $groupCounts[2]) {
+            // Berapa karyawan yang perlu dipindahkan agar shift pagi > shift malam
+            $excessCount = $groupCounts[2] - $groupCounts[1] + 1;
+            $employeesToMove = min($excessCount, $groupCounts[2] - 1); // Minimal 1 karyawan tetap di grup 2
+            
+            if ($employeesToMove > 0) {
+                $movedEmployees = array_splice($groups[2], -$employeesToMove);
+                $groups[1] = array_merge($groups[1], $movedEmployees);
+                
+                $groupCounts[2] -= $employeesToMove;
+                $groupCounts[1] += $employeesToMove;
             }
         }
+    }
+
+    /**
+     * Tetapkan karyawan yang dapat dirotasi ke grup
+     */
+    private function assignRotatableEmployees(Collection $employees, array &$groups, array &$groupCounts, bool $isTwoShiftPattern, bool $firstGroupHasPriority, int $maxGroup2): void
+    {
+        $rotatableEmployees = $employees->filter(function($employee) {
+            return $employee->rotated || !$employee->shift_id;
+        })->pluck('id')->toArray();
         
         shuffle($rotatableEmployees);
         
         foreach ($rotatableEmployees as $employeeId) {
-            if ($isTwoShiftPattern && $firstGroupHasPriority) {
-                if ($groupCounts[2] < $maxGroup2) {
-                    $targetGroup = 2;
-                } else {
-                    $targetGroup = 1;
+            // Periksa jika karyawan sudah ditetapkan
+            $alreadyAssigned = false;
+            foreach ($groups as $groupEmployees) {
+                if (in_array($employeeId, $groupEmployees)) {
+                    $alreadyAssigned = true;
+                    break;
                 }
-            } else {
-                $minCount = min($groupCounts);
-                $targetGroup = array_search($minCount, $groupCounts);
             }
+            
+            if ($alreadyAssigned) {
+                continue;
+            }
+            
+            $targetGroup = $this->determineTargetGroup($groupCounts, $isTwoShiftPattern, $firstGroupHasPriority, $maxGroup2);
             
             $groups[$targetGroup][] = $employeeId;
             $groupCounts[$targetGroup]++;
         }
+    }
+
+    /**
+     * Tentukan grup mana yang harus menerima karyawan berikutnya
+     */
+    private function determineTargetGroup(array $groupCounts, bool $isTwoShiftPattern, bool $firstGroupHasPriority, int $maxGroup2): int
+    {
+        if ($isTwoShiftPattern && $firstGroupHasPriority) {
+            if (($groupCounts[2] ?? 0) < $maxGroup2) {
+                return 2;
+            }
+            return 1;
+        } 
         
+        $minCount = min($groupCounts);
+        return array_search($minCount, $groupCounts) ?: 1;
+    }
+
+    /**
+     * Pastikan tidak ada grup yang kosong jika ada cukup karyawan
+     */
+    private function ensureNoEmptyGroups(array &$groups, array $groupCounts, int $totalEmployees): void
+    {
         foreach ($groups as $groupId => $employeeIds) {
             if (empty($employeeIds) && $totalEmployees > 0) {
-                $maxCount = max($groupCounts);
-                $maxGroup = array_search($maxCount, $groupCounts);
+                $maxGroupId = array_search(max($groupCounts), $groupCounts);
                 
-                if ($maxCount > 1) {
-                    $employeeToMove = array_pop($groups[$maxGroup]);
+                if ($maxGroupId && $groupCounts[$maxGroupId] > 1) {
+                    $employeeToMove = array_pop($groups[$maxGroupId]);
                     $groups[$groupId][] = $employeeToMove;
-                    $groupCounts[$maxGroup]--;
+                    $groupCounts[$maxGroupId]--;
                     $groupCounts[$groupId]++;
                 }
             }
         }
-        
-        return $groups;
     }
 
     /**
      * Menentukan apakah grup pertama membutuhkan lebih banyak staf
-     * berdasarkan pola waktu shift
+     * berdasarkan pola waktu shift (shift pagi > shift malam)
      */
     private function firstGroupRequiresMoreStaff(): bool
     {
-        if (count($this->shiftGroups) < 2) {
+        if (count($this->shiftGroups) < 2 || empty($this->shiftGroups[1]) || empty($this->shiftGroups[2])) {
             return false;
         }
         
-        $group1Shifts = $this->shiftGroups[1] ?? [];
-        $group2Shifts = $this->shiftGroups[2] ?? [];
-        
-        if (empty($group1Shifts) || empty($group2Shifts)) {
+        try {
+            $shift1 = Shift::find($this->shiftGroups[1][0]);
+            $shift2 = Shift::find($this->shiftGroups[2][0]);
+            
+            if (!$shift1 || !$shift2) {
+                return false;
+            }
+            
+            $start1 = Carbon::parse($shift1->start_time);
+            $end1 = Carbon::parse($shift1->end_time);
+            $start2 = Carbon::parse($shift2->start_time);
+            $end2 = Carbon::parse($shift2->end_time);
+            
+            // Shift 1 adalah shift "pagi" jika dimulai antara 05:00-12:00 
+            // dan berakhir antara 15:00-22:00
+            $isGroup1DayShift = $start1->hour >= 5 && $start1->hour <= 12 && 
+                               ($end1->hour >= 15 && $end1->hour <= 22);
+            
+            // Shift 2 adalah shift "malam" jika dimulai setelah 15:00
+            // atau berakhir sebelum 09:00 (menandakan shift yang melewati tengah malam)
+            $isGroup2NightShift = $start2->hour >= 15 || $end2->hour <= 9;
+            
+            return $isGroup1DayShift && $isGroup2NightShift;
+        } catch (\Exception $e) {
+            Log::warning("Error in firstGroupRequiresMoreStaff: " . $e->getMessage());
             return false;
         }
-        
-        $shift1 = Shift::find($group1Shifts[0]);
-        $shift2 = Shift::find($group2Shifts[0]);
-        
-        if (!$shift1 || !$shift2) {
-            return false;
-        }
-        
-        $start1 = Carbon::parse($shift1->start_time)->format('H:i');
-        $end1 = Carbon::parse($shift1->end_time)->format('H:i');
-        $start2 = Carbon::parse($shift2->start_time)->format('H:i');
-        $end2 = Carbon::parse($shift2->end_time)->format('H:i');
-        
-        $isGroup1DayShift = (strpos($start1, '06:') === 0 || strpos($start1, '07:') === 0 || strpos($start1, '08:') === 0) && 
-                            (strpos($end1, '17:') === 0 || strpos($end1, '18:') === 0 || strpos($end1, '19:') === 0);
-                            
-        $isGroup2NightShift = (strpos($start2, '18:') === 0 || strpos($start2, '19:') === 0 || strpos($start2, '20:') === 0) &&
-                            (strpos($end2, '06:') === 0 || strpos($end2, '07:') === 0 || strpos($end2, '08:') === 0);
-        
-        return $isGroup1DayShift && $isGroup2NightShift;
     }
     
     /**
-     * Generate jadwal untuk satu minggu
-     * Mendukung jumlah grup dinamis
+     * Generate jadwal untuk satu minggu dengan mendukung jumlah grup dinamis
      */
     private function generateWeeklySchedule(Carbon $startDate, array $employeeGroups, Collection $shifts): void
     {
-        $endDate = $startDate->copy()->addDays(6);
-        $currentDate = $startDate->copy();
-        
-
         if ($shifts->count() < 2) {
+            Log::warning("Not enough shifts to generate weekly schedule");
             return;
         }
         
+        $endDate = $startDate->copy()->addDays(6);
+        $currentDate = $startDate->copy();
+        
         while ($currentDate->lte($endDate)) {
-
             foreach ($employeeGroups as $groupId => $employeeIds) {
                 if (!isset($this->shiftGroups[$groupId])) continue;
                 
-
                 $shiftId = $this->getShiftForDate($groupId, $currentDate);
                 
                 foreach ($employeeIds as $employeeId) {
@@ -442,169 +647,298 @@ class WorkScheduleService
 
     /**
      * Menambahkan hari libur terdistribusi dalam seminggu
-     * Mendukung jumlah grup dinamis
      */
     private function addDistributedRestDays(Carbon $startDate, array $employeeGroups): void
     {
         if (!$this->offShiftId) {
+            Log::info("No off shift ID defined, skipping rest day distribution");
             return;
         }
         
-        $employeeWithGroup = [];
+        try {
+            $employeeWithGroup = $this->prepareEmployeesForRestDays($employeeGroups);
+            
+            shuffle($employeeWithGroup);
+            
+            $dayHasRest = array_fill(0, 7, false);
+            $maxDaysOff = min(7, count($employeeWithGroup));
+            
+            $daysAssigned = 0;
+            
+            foreach ($employeeWithGroup as $employee) {
+                if ($daysAssigned >= $maxDaysOff) {
+                    break;
+                }
+                
+                $employeeId = $employee['employee_id'];
+                $group = $employee['group'];
+                
+                $restDay = $this->findAvailableRestDay($dayHasRest);
+                if ($restDay === null) continue;
+                
+                $dayHasRest[$restDay] = true;
+                $daysAssigned++;
+                
+                $this->assignRestDay($employeeId, $group, $restDay, $startDate);
+            }
+            
+            $this->ensureMinimumWorkersPerShift($startDate, $employeeGroups);
+        } catch (\Exception $e) {
+            Log::error("Error adding distributed rest days: " . $e->getMessage());
+        }
+    }
+    
+    /**
+     * Siapkan array karyawan untuk pemberian hari libur
+     */
+    private function prepareEmployeesForRestDays(array $employeeGroups): array
+    {
+        $result = [];
         foreach ($employeeGroups as $groupId => $employeeIds) {
             foreach ($employeeIds as $employeeId) {
-                $employeeWithGroup[] = [
+                $result[] = [
                     'employee_id' => $employeeId,
                     'group' => $groupId
                 ];
             }
         }
-        
-        shuffle($employeeWithGroup);
-        
-        $dayHasRest = array_fill(0, 7, false);
-        $maxDaysOff = min(7, count($employeeWithGroup));
-        
-        $daysAssigned = 0;
-        
-        foreach ($employeeWithGroup as $employee) {
-            if ($daysAssigned >= $maxDaysOff) {
-                break;
-            }
-            
-            $employeeId = $employee['employee_id'];
-            $group = $employee['group'];
-            
-            $restDay = null;
-            for ($day = 0; $day < 7; $day++) {
-                if (!$dayHasRest[$day]) {
-                    $restDay = $day;
-                    break;
-                }
-            }
-            
-            if ($restDay === null) {
-                continue;
-            }
-            
-            $dayHasRest[$restDay] = true;
-            $daysAssigned++;
-            
-            $restDate = $startDate->copy()->addDays($restDay);
-            
-            $existingSchedule = WorkSchedule::where('employee_id', $employeeId)
-                ->where('date', $restDate->format('Y-m-d'))
-                ->first();
-            
-            if ($existingSchedule) {
-                $existingSchedule->update([
-                    'shift_id' => $this->offShiftId,
-                    'status' => 'absent'
-                ]);
-                
-                $this->employeeRestDays[$employeeId] = [
-                    'date' => $restDate->copy(),
-                    'prev_group' => $group
-                ];
-                
-                $this->lastEmployeeShifts[$employeeId] = [
-                    'shift_id' => $this->offShiftId,
-                    'date' => $restDate->copy(),
-                ];
-            }
-        }
-        
-        $this->ensureMinimumWorkersPerShift($startDate, $employeeGroups);
+        return $result;
     }
     
     /**
-     * Memastikan setiap grup memiliki minimal 1 karyawan yang bekerja setiap hari
-     * Mendukung jumlah grup dinamis
+     * Cari hari yang belum memiliki jadwal libur
+     */
+    private function findAvailableRestDay(array $dayHasRest): ?int
+    {
+        for ($day = 0; $day < 7; $day++) {
+            if (!$dayHasRest[$day]) {
+                return $day;
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * Tetapkan hari libur ke seorang karyawan
+     */
+    private function assignRestDay(int $employeeId, int $group, int $restDay, Carbon $startDate): void
+    {
+        $restDate = $startDate->copy()->addDays($restDay);
+        
+        $existingSchedule = WorkSchedule::where('employee_id', $employeeId)
+            ->where('date', $restDate->format('Y-m-d'))
+            ->first();
+        
+        if ($existingSchedule) {
+            $existingSchedule->update([
+                'shift_id' => $this->offShiftId,
+                'status' => 'absent'
+            ]);
+            
+            $this->employeeRestDays[$employeeId] = [
+                'date' => $restDate->copy(),
+                'prev_group' => $group
+            ];
+            
+            $this->lastEmployeeShifts[$employeeId] = [
+                'shift_id' => $this->offShiftId,
+                'date' => $restDate->copy(),
+            ];
+        }
+    }
+    
+    /**
+     * Memastikan setiap shift memiliki minimal 1 karyawan yang bekerja setiap hari
      */
     private function ensureMinimumWorkersPerShift(Carbon $startDate, array $employeeGroups): void
     {
+        // Ambil semua shift aktif (bukan off/libur)
+        $activeShifts = Shift::when($this->offShiftId, function($query) {
+            return $query->where('id', '!=', $this->offShiftId);
+        })->where(function($query) {
+            $query->whereRaw("LOWER(name) NOT LIKE '%admin%'")
+                  ->whereRaw("LOWER(name) NOT LIKE '%off%'")
+                  ->whereRaw("LOWER(name) NOT LIKE '%libur%'")
+                  ->whereRaw("LOWER(name) NOT LIKE '%rest%'")
+                  ->whereRaw("LOWER(name) NOT LIKE '%free%'");
+        })->pluck('id')->toArray();
+        
+        if (empty($activeShifts)) {
+            return;
+        }
+
+        // Periksa setiap hari dalam seminggu
         for ($day = 0; $day < 7; $day++) {
             $date = $startDate->copy()->addDays($day);
             $dateStr = $date->format('Y-m-d');
             
-            foreach (array_keys($employeeGroups) as $groupId) {
-                $activeWorkers = 0;
+            // Periksa apakah setiap jenis shift memiliki setidaknya satu karyawan
+            $shiftCoverage = array_fill_keys($activeShifts, 0);
+            
+            // Hitung berapa karyawan untuk setiap shift pada hari ini
+            $schedules = WorkSchedule::where('date', $dateStr)
+                ->whereIn('shift_id', $activeShifts)
+                ->get();
                 
-                foreach ($employeeGroups[$groupId] as $employeeId) {
-                    $schedule = WorkSchedule::where('employee_id', $employeeId)
-                        ->where('date', $dateStr)
-                        ->first();
-                    
-                    if ($schedule && $schedule->shift_id !== $this->offShiftId) {
-                        $activeWorkers++;
-                    }
+            foreach ($schedules as $schedule) {
+                if (isset($shiftCoverage[$schedule->shift_id])) {
+                    $shiftCoverage[$schedule->shift_id]++;
                 }
-                
-                if ($activeWorkers < 1 && !empty($employeeGroups[$groupId])) {
-                    foreach ($employeeGroups[$groupId] as $employeeId) {
-                        $schedule = WorkSchedule::where('employee_id', $employeeId)
-                            ->where('date', $dateStr)
-                            ->where('shift_id', $this->offShiftId)
-                            ->first();
+            }
+            
+            // Identifikasi shift yang tidak memiliki karyawan
+            $uncoveredShifts = [];
+            foreach ($shiftCoverage as $shiftId => $count) {
+                if ($count === 0) {
+                    $uncoveredShifts[] = $shiftId;
+                }
+            }
+            
+            if (!empty($uncoveredShifts)) {
+                // Cari karyawan yang bisa dipindahkan untuk mengisi shift kosong
+                foreach ($uncoveredShifts as $uncoveredShiftId) {
+                    $shiftGroup = $this->getShiftGroupId($uncoveredShiftId);
+                    
+                    // Coba temukan karyawan untuk dipindahkan
+                    $employeeFound = false;
+                    
+                    // Strategi 1: Cari karyawan yang sedang libur hari ini
+                    $restingEmployee = $this->findRestingEmployeeForShift($dateStr);
+                    
+                    if ($restingEmployee) {
+                        // Periksa jika karyawan yang libur adalah non-admin jika shift yang kosong adalah admin
+                        $isAdminShift = $this->isAdminShift($uncoveredShiftId);
+                        $isEmployeeAdmin = $this->isEmployeeAdmin($restingEmployee);
                         
-                        if ($schedule) {
-                            $shiftId = $this->getShiftForDate($groupId, $date);
-                            
-                            $schedule->update([
-                                'shift_id' => $shiftId,
-                                'status' => 'scheduled'
-                            ]);
-                            
-                            if (isset($this->employeeRestDays[$employeeId])) {
-                                unset($this->employeeRestDays[$employeeId]);
+                        // Jika shift kosong adalah admin shift dan karyawan non-admin, cari karyawan lain
+                        if (!($isAdminShift && !$isEmployeeAdmin)) {
+                            $this->assignEmployeeToShift($restingEmployee, $uncoveredShiftId, $date);
+                            $employeeFound = true;
+                        }
+                    }
+                    
+                    // Strategi 2: Jika tidak ada yang libur, cari karyawan dari shift lain dengan coverage > 1
+                    if (!$employeeFound) {
+                        foreach ($shiftCoverage as $shiftId => $count) {
+                            if ($count > 1 && $shiftId !== $uncoveredShiftId) {
+                                $employeeToMove = $this->findEmployeeFromShift($dateStr, $shiftId, $uncoveredShiftId);
+                                
+                                if ($employeeToMove) {
+                                    $this->assignEmployeeToShift($employeeToMove, $uncoveredShiftId, $date);
+                                    $employeeFound = true;
+                                    break;
+                                }
                             }
-                            
-                            $this->lastEmployeeShifts[$employeeId] = [
-                                'shift_id' => $shiftId,
-                                'date' => $date->copy(),
-                            ];
-                            
-                            break;
+                        }
+                    }
+                    
+                    // Strategi 3: Jika masih belum ada, ambil karyawan dari shift manapun
+                    if (!$employeeFound) {
+                        foreach ($activeShifts as $shiftId) {
+                            if ($shiftId !== $uncoveredShiftId) {
+                                $employeeToMove = $this->findEmployeeFromShift($dateStr, $shiftId, $uncoveredShiftId);
+                                
+                                if ($employeeToMove) {
+                                    $this->assignEmployeeToShift($employeeToMove, $uncoveredShiftId, $date);
+                                    break;
+                                }
+                            }
                         }
                     }
                 }
             }
         }
     }
+
+    /**
+     * Memeriksa apakah shift tertentu adalah shift Admin
+     */
+    private function isAdminShift(int $shiftId): bool
+    {
+        $shift = Shift::find($shiftId);
+        
+        if (!$shift) {
+            return false;
+        }
+        
+        // Shift Admin ditandai dengan nama "Admin" atau mengandung kata "admin"
+        return stripos($shift->name, 'admin') !== false;
+    }
     
     /**
-     * Membuat jadwal kerja untuk satu karyawan pada tanggal tertentu
+     * Memeriksa apakah karyawan adalah admin
      */
-    private function createSchedule(int $employeeId, int $shiftId, Carbon $date): void
+    private function isEmployeeAdmin(int $employeeId): bool
     {
-        $lastSchedule = WorkSchedule::where('employee_id', $employeeId)
-            ->where('date', '<', $date->format('Y-m-d'))
-            ->orderBy('date', 'desc')
+        $employee = Employee::find($employeeId);
+        return $employee ? $employee->is_admin : false;
+    }
+
+    /**
+     * Temukan karyawan yang sedang libur pada hari tertentu
+     */
+    private function findRestingEmployeeForShift(string $dateStr): ?int
+    {
+        $restingEmployee = WorkSchedule::where('date', $dateStr)
+            ->where('shift_id', $this->offShiftId)
             ->first();
+        
+        return $restingEmployee ? $restingEmployee->employee_id : null;
+    }
+
+    /**
+     * Temukan karyawan yang bekerja pada shift tertentu pada hari tertentu
+     * yang dapat dipindahkan ke shift target
+     */
+    private function findEmployeeFromShift(string $dateStr, int $sourceShiftId, int $targetShiftId): ?int
+    {
+        $isTargetAdminShift = $this->isAdminShift($targetShiftId);
+        
+        // Ambil karyawan dari shift sumber
+        $schedules = WorkSchedule::with('employee')
+            ->where('date', $dateStr)
+            ->where('shift_id', $sourceShiftId)
+            ->get();
             
-        if ($lastSchedule) {
-            $lastShift = Shift::find($lastSchedule->shift_id);
-            $currentShift = Shift::find($shiftId);
+        foreach ($schedules as $schedule) {
+            if (!$schedule->employee) continue;
             
-            if ($lastShift && $currentShift) {
-                $lastEndTime = Carbon::parse($lastShift->end_time);
-                $currentStartTime = Carbon::parse($currentShift->start_time);
-                
-                // Jika shift terakhir berakhir setelah tengah malam dan shift baru mulai pagi hari
-                if ($lastEndTime->hour < 8 && $currentStartTime->hour < 10) {
-                    $lastDate = Carbon::parse($lastSchedule->date);
-                    if ($lastDate->addDay()->isSameDay($date)) {
-                        // Skip - tidak cukup waktu istirahat
-                        return;
-                    }
+            // Jika shift target adalah admin, hanya admin yang bisa dipindahkan ke sana
+            if ($isTargetAdminShift && !$schedule->employee->is_admin) {
+                continue;
+            }
+            
+            return $schedule->employee_id;
+        }
+        
+        return null;
+    }
+
+    /**
+     * Tugaskan karyawan ke shift tertentu
+     */
+    private function assignEmployeeToShift(int $employeeId, int $shiftId, Carbon $date): void
+    {
+        // Periksa jika karyawan adalah admin untuk shift admin
+        if ($this->isAdminShift($shiftId)) {
+            $isAdmin = $this->isEmployeeAdmin($employeeId);
+            
+            if (!$isAdmin) {
+                // Jika bukan admin, cari shift alternatif
+                $alternativeShift = $this->findAlternativeShiftForEmployee($employeeId, [$shiftId], $date);
+                if ($alternativeShift) {
+                    $shiftId = $alternativeShift;
                 }
             }
         }
         
+        $dateStr = $date->format('Y-m-d');
+        
+        // Gunakan updateOrCreate untuk menghindari duplikasi
         WorkSchedule::updateOrCreate(
             [
                 'employee_id' => $employeeId,
-                'date' => $date->format('Y-m-d')
+                'date' => $dateStr
             ],
             [
                 'shift_id' => $shiftId,
@@ -612,48 +946,172 @@ class WorkScheduleService
             ]
         );
         
-
+        // Update tracking
         $this->lastEmployeeShifts[$employeeId] = [
             'shift_id' => $shiftId,
             'date' => $date->copy(),
         ];
     }
+    
+    /**
+     * Membuat jadwal kerja untuk satu karyawan pada tanggal tertentu
+     */
+    private function createSchedule(int $employeeId, int $shiftId, Carbon $date): void
+    {
+        try {
+            // Periksa jika perlu periode istirahat antara shift
+            $needsRestPeriod = $this->needsRestPeriodBetweenShifts($employeeId, $shiftId, $date);
+            
+            if ($needsRestPeriod) {
+                // Jika butuh istirahat, lewati pembuatan jadwal
+                return;
+            }
+            
+            // Periksa jika karyawan non-admin mencoba ditetapkan ke shift admin
+            $isAdminShift = $this->isAdminShift($shiftId);
+            $isEmployeeAdmin = $this->isEmployeeAdmin($employeeId);
+            
+            if ($isAdminShift && !$isEmployeeAdmin) {
+                // Cari shift alternatif untuk karyawan non-admin
+                $alternativeShift = $this->findAlternativeShiftForEmployee($employeeId, [$shiftId], $date);
+                if ($alternativeShift) {
+                    $shiftId = $alternativeShift;
+                }
+            }
+            
+            // Buat atau perbarui jadwal
+            WorkSchedule::updateOrCreate(
+                [
+                    'employee_id' => $employeeId,
+                    'date' => $date->format('Y-m-d')
+                ],
+                [
+                    'shift_id' => $shiftId,
+                    'status' => 'scheduled'
+                ]
+            );
+            
+            // Update tracking
+            $this->lastEmployeeShifts[$employeeId] = [
+                'shift_id' => $shiftId,
+                'date' => $date->copy(),
+            ];
+        } catch (\Exception $e) {
+            Log::error("Error creating schedule for employee #{$employeeId}: " . $e->getMessage());
+        }
+    }
+    
+    /**
+     * Tentukan apakah karyawan membutuhkan istirahat antara shift
+     */
+    private function needsRestPeriodBetweenShifts(int $employeeId, int $shiftId, Carbon $date): bool
+    {
+        $lastSchedule = WorkSchedule::where('employee_id', $employeeId)
+            ->where('date', '<', $date->format('Y-m-d'))
+            ->orderBy('date', 'desc')
+            ->first();
+            
+        if (!$lastSchedule) {
+            return false;
+        }
+        
+        try {
+            $lastShift = Shift::find($lastSchedule->shift_id);
+            $currentShift = Shift::find($shiftId);
+            
+            if (!$lastShift || !$currentShift) {
+                return false;
+            }
+            
+            $lastEndTime = Carbon::parse($lastShift->end_time);
+            $currentStartTime = Carbon::parse($currentShift->start_time);
+            
+            // Jika shift terakhir selesai setelah tengah malam dan shift baru mulai dini hari
+            if ($lastEndTime->hour < 8 && $currentStartTime->hour < 10) {
+                $lastDate = Carbon::parse($lastSchedule->date);
+                return $lastDate->addDay()->isSameDay($date);
+            }
+            
+            return false;
+        } catch (\Exception $e) {
+            Log::warning("Error checking rest period: " . $e->getMessage());
+            return false;
+        }
+    }
 
     /**
-     * Rotasi karyawan berdasarkan hari libur mereka
-     * Mendukung jumlah grup dinamis
+     * Rotasi karyawan berdasarkan hari libur mereka dengan dukungan jumlah grup dinamis
      */
     private function rotateEmployeesAfterRest(array $groups, Carbon $weekEndDate): array
     {
-        $totalGroups = count($this->shiftGroups);
-        
-        $newGroups = [];
-        foreach (array_keys($this->shiftGroups) as $groupId) {
-            $newGroups[$groupId] = [];
-        }
-        
-        if (empty($newGroups)) {
+        try {
+            $totalGroups = count($this->shiftGroups);
+            if ($totalGroups === 0) {
+                return $groups;
+            }
+            
+            $newGroups = array_fill_keys(array_keys($this->shiftGroups), []);
+            
+            $allEmployeeIds = $this->getAllEmployeeIds($groups);
+            
+            $employees = Employee::whereIn('id', $allEmployeeIds)
+                ->select('id', 'rotated', 'shift_id', 'is_admin')
+                ->get();
+            
+            // Buat map dari ID karyawan ke grup sebelumnya
+            $previousGroupMap = $this->buildPreviousGroupMap($groups);
+            
+            // Pertama tangani karyawan non-rotatable
+            $this->assignNonRotatableEmployeesToNewGroups($employees, $newGroups);
+            
+            // Kemudian tangani karyawan yang memiliki hari istirahat - rotasi ke grup berikutnya
+            $employeesWithRestRecord = $this->rotateEmployeesWithRestDays($newGroups, $totalGroups);
+            
+            // Terakhir tangani karyawan rotatable yang tersisa
+            $this->assignRemainingRotatableEmployees($employees, $newGroups, $previousGroupMap, $employeesWithRestRecord);
+            
+            // Seimbangkan grup untuk memastikan tidak ada yang kosong
+            $this->balanceGroups($newGroups, $totalGroups);
+            
+            return $newGroups;
+        } catch (\Exception $e) {
+            Log::error("Error rotating employees: " . $e->getMessage());
             return $groups;
         }
-        
-        $allEmployeeIds = [];
+    }
+    
+    /**
+     * Dapatkan semua ID karyawan dari semua grup
+     */
+    private function getAllEmployeeIds(array $groups): array
+    {
+        $allIds = [];
         foreach ($groups as $employeeIds) {
-            $allEmployeeIds = array_merge($allEmployeeIds, $employeeIds);
+            $allIds = array_merge($allIds, $employeeIds);
         }
-        
-        $employees = Employee::whereIn('id', $allEmployeeIds)
-            ->select('id', 'rotated', 'shift_id')
-            ->get();
-        
-        $rotatableEmployees = $employees->where('rotated', true)->pluck('id')->toArray();
-        $nonRotatableEmployees = $employees->where('rotated', false);
-        
-        $previousGroupMap = [];
+        return $allIds;
+    }
+    
+    /**
+     * Buat map dari ID karyawan ke grup sebelumnya mereka
+     */
+    private function buildPreviousGroupMap(array $groups): array
+    {
+        $map = [];
         foreach ($groups as $groupId => $employeeIds) {
             foreach ($employeeIds as $employeeId) {
-                $previousGroupMap[$employeeId] = $groupId;
+                $map[$employeeId] = $groupId;
             }
         }
+        return $map;
+    }
+    
+    /**
+     * Tetapkan karyawan non-rotatable ke grup shift spesifik mereka
+     */
+    private function assignNonRotatableEmployeesToNewGroups(Collection $employees, array &$newGroups): void
+    {
+        $nonRotatableEmployees = $employees->where('rotated', false);
         
         foreach ($nonRotatableEmployees as $employee) {
             $shiftGroup = $this->getShiftGroupId($employee->shift_id);
@@ -662,15 +1120,21 @@ class WorkScheduleService
                 $newGroups[$shiftGroup][] = $employee->id;
             } else {
                 $firstGroupId = array_key_first($newGroups);
-                $newGroups[$firstGroupId][] = $employee->id;
+                if ($firstGroupId) {
+                    $newGroups[$firstGroupId][] = $employee->id;
+                }
             }
         }
+    }
+    
+    /**
+     * Rotasi karyawan yang memiliki hari libur ke grup berikutnya
+     */
+    private function rotateEmployeesWithRestDays(array &$newGroups, int $totalGroups): array
+    {
+        $employeesProcessed = [];
         
-        $employeesWithRestRecord = [];
         foreach ($this->employeeRestDays as $employeeId => $restInfo) {
-            if (!in_array($employeeId, $rotatableEmployees)) continue;
-            
-            $employeesWithRestRecord[] = $employeeId;
             $prevGroup = $restInfo['prev_group'];
             
             $nextGroup = $prevGroup + 1;
@@ -680,109 +1144,141 @@ class WorkScheduleService
             
             if (isset($newGroups[$nextGroup])) {
                 $newGroups[$nextGroup][] = $employeeId;
+                $employeesProcessed[] = $employeeId;
             }
         }
         
-
+        return $employeesProcessed;
+    }
+    
+    /**
+     * Tetapkan karyawan rotatable yang tersisa ke grup
+     */
+    private function assignRemainingRotatableEmployees(Collection $employees, array &$newGroups, array $previousGroupMap, array $employeesProcessed): void
+    {
+        $rotatableEmployees = $employees->where('rotated', true)->pluck('id');
+        
         foreach ($rotatableEmployees as $employeeId) {
-            if (in_array($employeeId, $employeesWithRestRecord)) continue;
-
-            $alreadyAssigned = false;
-            foreach ($newGroups as $groupEmployees) {
-                if (in_array($employeeId, $groupEmployees)) {
-                    $alreadyAssigned = true;
-                    break;
-                }
+            if (in_array($employeeId, $employeesProcessed)) {
+                continue;
             }
-            if ($alreadyAssigned) continue;
+            
+            if ($this->isEmployeeAlreadyAssigned($employeeId, $newGroups)) {
+                continue;
+            }
             
             $currentGroup = $previousGroupMap[$employeeId] ?? 1;
             if (isset($newGroups[$currentGroup])) {
                 $newGroups[$currentGroup][] = $employeeId;
             }
         }
-        
-        $this->balanceGroups($newGroups, $totalGroups);
-        
-        return $newGroups;
     }
-
+    
     /**
-     * Menyeimbangkan jumlah karyawan di setiap grup dengan tetap
-     * mempertahankan prioritas grup 1 jika perlu
+     * Periksa apakah karyawan sudah ditetapkan ke grup manapun
+     */
+    private function isEmployeeAlreadyAssigned(int $employeeId, array $groups): bool
+    {
+        foreach ($groups as $groupEmployees) {
+            if (in_array($employeeId, $groupEmployees)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * Seimbangkan distribusi karyawan di seluruh grup
      */
     private function balanceGroups(array &$groups, int $totalGroups): void
     {
-        $minEmployeesPerGroup = 1;
-        
-        $isTwoShiftPattern = $totalGroups === 2;
-        $firstGroupHasPriority = false;
-        
-        if ($isTwoShiftPattern) {
-            $firstGroupHasPriority = $this->firstGroupRequiresMoreStaff();
+        if ($totalGroups <= 1) {
+            return;
         }
         
-        $employeesPerGroup = [];
+        // Hitung total karyawan dan jumlah ideal per grup
         $totalEmployees = 0;
-        foreach ($groups as $groupId => $employees) {
-            $employeesPerGroup[$groupId] = count($employees);
-            $totalEmployees += count($employees);
+        foreach ($groups as $groupEmployees) {
+            $totalEmployees += count($groupEmployees);
         }
         
-        if ($isTwoShiftPattern && $firstGroupHasPriority) {
-            if ($employeesPerGroup[1] <= $employeesPerGroup[2]) {
-                $employeesToMove = $employeesPerGroup[2] - $employeesPerGroup[1] + 1;
+        $targetSize = ceil($totalEmployees / $totalGroups);
+        
+        // PERUBAHAN: Jika pola 2 shift dan grup 1 prioritas (shift siang),
+        // selalu pastikan grup 1 memiliki minimal sama banyak dengan grup 2
+        if ($totalGroups == 2 && $this->firstGroupRequiresMoreStaff()) {
+            // Jika shift malam memiliki lebih banyak karyawan dari shift siang
+            if (count($groups[1]) <= count($groups[2])) {
+                // Hitung berapa karyawan yang perlu dipindahkan agar shift siang > shift malam
+                $employeesToMove = count($groups[2]) - count($groups[1]) + 1;
                 
-                $employeesToMove = min($employeesToMove, $employeesPerGroup[2] - $minEmployeesPerGroup);
+                // Pastikan kita tidak memindahkan terlalu banyak karyawan
+                // Minimal tetap 1 karyawan di grup 2
+                $employeesToMove = min($employeesToMove, count($groups[2]) - 1);
                 
-                for ($i = 0; $i < $employeesToMove; $i++) {
-                    if (!empty($groups[2]) && $employeesPerGroup[2] > $minEmployeesPerGroup) {
-                        $employeeToMove = array_pop($groups[2]);
-                        $groups[1][] = $employeeToMove;
-                        $employeesPerGroup[2]--;
-                        $employeesPerGroup[1]++;
-                    }
+                // Pindahkan karyawan dari grup 2 ke grup 1
+                if ($employeesToMove > 0) {
+                    $movedEmployees = array_splice($groups[2], -$employeesToMove);
+                    $groups[1] = array_merge($groups[1], $movedEmployees);
                 }
             }
         }
         
-        foreach ($employeesPerGroup as $groupId => $count) {
-            if ($count < $minEmployeesPerGroup) {
-                $maxGroupId = null;
-                $maxEmployees = 0;
+        // Identifikasi grup dengan kelebihan karyawan
+        $excessGroups = [];
+        $deficitGroups = [];
+        
+        foreach ($groups as $groupId => $groupEmployees) {
+            $count = count($groupEmployees);
+            $diff = $count - $targetSize;
+            
+            if ($diff > 0) {
+                $excessGroups[$groupId] = $diff;
+            } elseif ($diff < 0) {
+                $deficitGroups[$groupId] = abs($diff);
+            }
+        }
+        
+        // Pastikan minimal 1 karyawan per grup
+        foreach ($groups as $groupId => $employeeIds) {
+            if (empty($employeeIds)) {
+                // Cari grup dengan karyawan terbanyak
+                $maxGroupId = array_search(max(array_map('count', $groups)), $groups);
                 
-                foreach ($employeesPerGroup as $gId => $gCount) {
-                    if ($gCount > $maxEmployees && (!($firstGroupHasPriority && $gId == 1) || $gCount > 2)) {
-                        $maxEmployees = $gCount;
-                        $maxGroupId = $gId;
-                    }
+                if ($maxGroupId && count($groups[$maxGroupId]) > 1) {
+                    $employeeToMove = array_pop($groups[$maxGroupId]);
+                    $groups[$groupId][] = $employeeToMove;
+                }
+            }
+        }
+        
+        // Pindahkan karyawan dari grup berlebih ke grup defisit
+        foreach ($excessGroups as $fromGroupId => $excessCount) {
+            foreach ($deficitGroups as $toGroupId => $neededCount) {
+                if ($excessCount <= 0 || $neededCount <= 0) {
+                    continue;
                 }
                 
-                if ($maxGroupId !== null && $maxEmployees > $minEmployeesPerGroup) {
-                    $neededEmployees = $minEmployeesPerGroup - $count;
-                    
-                    for ($i = 0; $i < $neededEmployees; $i++) {
-                        if (!empty($groups[$maxGroupId])) {
-                            $employeeToMove = array_pop($groups[$maxGroupId]);
-                            $groups[$groupId][] = $employeeToMove;
-                            $employeesPerGroup[$maxGroupId]--;
-                            $employeesPerGroup[$groupId]++;
-                        }
-                    }
+                $employeesToMove = min($excessCount, $neededCount);
+                if ($employeesToMove <= 0) {
+                    continue;
                 }
+                
+                $movedEmployees = array_splice($groups[$fromGroupId], -$employeesToMove);
+                $groups[$toGroupId] = array_merge($groups[$toGroupId], $movedEmployees);
+                
+                $excessGroups[$fromGroupId] -= $employeesToMove;
+                $deficitGroups[$toGroupId] -= $employeesToMove;
             }
         }
     }
 
     /**
      * Menentukan grup shift berdasarkan shift_id dari database
-     * 
-     * @param int|string|null $shiftId
-     * @return int
      */
     private function getShiftGroupId($shiftId): int
     {
-        if (empty($shiftId)) {
+        if (empty($shiftId) || empty($this->shiftGroups)) {
             return array_key_first($this->shiftGroups) ?? 1;
         }
         
@@ -808,90 +1304,6 @@ class WorkScheduleService
         $dayOfWeek = $date->dayOfWeek;
         
         $shiftIndex = $dayOfWeek % $shiftCount;
-        return $this->shiftGroups[$groupId][$shiftIndex];
+        return $this->shiftGroups[$groupId][$shiftIndex] ?? $this->shiftGroups[$groupId][0];
     }
-
-    /**
-     * Rotasi karyawan antar shift dengan memperhatikan kolom rotated
-     */
-    // private function rotateEmployees(array $groups): array
-    // {
-    //     $newGroups = [
-    //         1 => [],
-    //         2 => []
-    //     ];
-        
-    //     // Ambil semua employee yang dapat dirotasi
-    //     $employees = Employee::whereIn('id', array_merge($groups[1], $groups[2]))->get();
-    //     $rotatableEmployeesIds = $employees->where('rotated', true)->pluck('id')->toArray();
-    //     $nonRotatableEmployeesIds = $employees->where('rotated', false)->pluck('id')->toArray();
-        
-    //     // Karyawan yang tidak dapat dirotasi tetap di grup yang sama
-    //     foreach ($groups as $shiftId => $employeeIds) {
-    //         foreach ($employeeIds as $employeeId) {
-    //             if (in_array($employeeId, $nonRotatableEmployeesIds)) {
-    //                 $newGroups[$shiftId][] = $employeeId;
-    //             }
-    //         }
-    //     }
-        
-    //     // Hitung berapa karyawan yang perlu dirotasi
-    //     $rotatableG1 = array_intersect($groups[1], $rotatableEmployeesIds);
-    //     $rotatableG2 = array_intersect($groups[2], $rotatableEmployeesIds);
-        
-    //     // Hitung berapa karyawan yang perlu dipindahkan dari setiap grup
-    //     // Mempertimbangkan kebutuhan minimal 2 karyawan per grup
-    //     $moveFromG1Count = min(
-    //         ceil(count($rotatableG1) / 2),
-    //         count($rotatableG1) - max(0, 2 - count($newGroups[1]))
-    //     );
-        
-    //     $moveFromG2Count = min(
-    //         floor(count($rotatableG2) / 2),
-    //         count($rotatableG2) - max(0, 2 - count($newGroups[2]))
-    //     );
-        
-    //     // Jika setelah rotasi, ada grup yang kurang dari 2 orang, sesuaikan
-    //     if (count($newGroups[1]) + count($rotatableG2) - $moveFromG2Count < 2) {
-    //         $moveFromG2Count = count($rotatableG2) - (2 - count($newGroups[1]));
-    //         $moveFromG2Count = max(0, $moveFromG2Count); // Pastikan tidak negatif
-    //     }
-        
-    //     if (count($newGroups[2]) + count($rotatableG1) - $moveFromG1Count < 2) {
-    //         $moveFromG1Count = count($rotatableG1) - (2 - count($newGroups[2]));
-    //         $moveFromG1Count = max(0, $moveFromG1Count); // Pastikan tidak negatif
-    //     }
-        
-    //     // Karyawan yang tetap di grup 1
-    //     $stayInG1 = array_slice($rotatableG1, 0, count($rotatableG1) - $moveFromG1Count);
-    //     foreach ($stayInG1 as $employeeId) {
-    //         $newGroups[1][] = $employeeId;
-    //     }
-        
-    //     // Karyawan dari grup 2 yang pindah ke grup 1
-    //     $moveToG1 = array_slice($rotatableG2, 0, $moveFromG2Count);
-    //     foreach ($moveToG1 as $employeeId) {
-    //         $newGroups[1][] = $employeeId;
-    //     }
-        
-    //     // Karyawan dari grup 1 yang pindah ke grup 2
-    //     $moveToG2 = array_slice($rotatableG1, count($rotatableG1) - $moveFromG1Count);
-    //     foreach ($moveToG2 as $employeeId) {
-    //         $newGroups[2][] = $employeeId;
-    //     }
-        
-    //     // Karyawan yang tetap di grup 2
-    //     $stayInG2 = array_slice($rotatableG2, $moveFromG2Count);
-    //     foreach ($stayInG2 as $employeeId) {
-    //         $newGroups[2][] = $employeeId;
-    //     }
-        
-    //     // Pastikan setiap grup minimal 2 orang
-    //     if (count($newGroups[1]) < 2 || count($newGroups[2]) < 2) {
-    //         // Jika gagal memenuhi minimal 2 orang, kembalikan grup asli
-    //         return $groups;
-    //     }
-        
-    //     return $newGroups;
-    // }
 }
