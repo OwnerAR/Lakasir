@@ -39,12 +39,12 @@ class WhatsappService
     public function sendMessage(string $to, string $message)
     {
         $payload = [
-            'to' => $to,
+            'jid' => $to,
             'message' => $message,
         ];
 
         $response = Http::withToken($this->token)
-            ->post("{$this->baseUrl}/api/send", $payload);
+            ->post("{$this->baseUrl}/api/whatsapp/send", $payload);
 
         return $response->json();
     }
