@@ -15,6 +15,7 @@ use Filament\Tables\Table;
 use Filament\Forms\Components\Toggle;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ToggleColumn;
+use Filament\Tables\Columns\ImageColumn;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 
@@ -28,6 +29,7 @@ class EmployeeResource extends Resource
 
     public static function form(Form $form): Form
     {
+
         return $form
             ->schema([
                 Forms\Components\TextInput::make('employee_id')
@@ -48,12 +50,9 @@ class EmployeeResource extends Resource
                     ->label(__('Position'))
                     ->required()
                     ->translateLabel(),
-                Forms\Components\Select::make('shift')
+                Forms\Components\Select::make('shift_id')
                     ->label(__('Shift'))
-                    ->options([
-                        'pagi' => __('Morning'),
-                        'sore' => __('Afternoon'),
-                    ])
+                    ->relationship('shift', 'name')
                     ->required()
                     ->translateLabel(),
                 Forms\Components\TextInput::make('salary')
@@ -67,9 +66,17 @@ class EmployeeResource extends Resource
                     ->disk('public')
                     ->directory('employees')
                     ->image()
+                    ->imageResizeMode('cover')
+                    ->imageCropAspectRatio('1:1')
+                    ->imageResizeTargetWidth('300')
+                    ->imageResizeTargetHeight('300')
                     ->maxSize(1024)
                     ->acceptedFileTypes(['image/*'])
                     ->translateLabel()
+                    ->visibility('public')
+                    ->downloadable()
+                    ->previewable(true)
+                    ->openable(true)
                     ->nullable(),
                 Toggle::make('is_active')
                     ->label(__('Active'))
@@ -110,14 +117,9 @@ class EmployeeResource extends Resource
                     ->searchable()
                     ->translateLabel()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('shift')
+                Tables\Columns\TextColumn::make('shift.name')
                     ->label(__('Shift'))
                     ->searchable()
-                    ->formatStateUsing(fn ($state) => match ($state) {
-                        'pagi' => __('Morning'),
-                        'sore' => __('Afternoon'),
-                        default => $state,
-                    })
                     ->translateLabel()
                     ->sortable(),
                 Tables\Columns\TextColumn::make('salary')
@@ -125,11 +127,6 @@ class EmployeeResource extends Resource
                     ->money(Setting::get('currency', 'IDR'))
                     ->translateLabel()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('foto_url')
-                    ->label(__('Profile Picture'))
-                    ->copyable()
-                    ->translateLabel()
-                    ->formatStateUsing(fn ($state) => $state ?: '-'),
                 ToggleColumn::make('is_active')
                     ->label(__('Active'))
                     ->translateLabel()
