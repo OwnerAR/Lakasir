@@ -241,6 +241,10 @@ class WorkScheduleService
                 
                 // Pastikan semua shift memiliki minimal satu karyawan setiap hari
                 $this->ensureMinimumWorkersPerShift($currentDate, $employeeGroups);
+
+                for ($day = 0; $day < 7; $day++) {
+                    $this->ensureCorrectShiftDistribution($currentDate->copy()->addDays($day));
+                }
                 
                 $currentDate->addWeek();
             }
@@ -433,8 +437,8 @@ class WorkScheduleService
         if ($isTwoShiftPattern && $firstGroupHasPriority) {
             // Untuk shift pagi/malam dengan prioritas shift pagi:
             // 65% karyawan di shift pagi, 35% di shift malam
-            $group1Ratio = 0.65;
-            $group2Ratio = 0.35;
+            $group1Ratio = 0.75;
+            $group2Ratio = 0.25;
             
             $minGroup1 = max(2, ceil($totalEmployees * $group1Ratio));
             $maxGroup2 = min(floor($totalEmployees * $group2Ratio), $totalEmployees - $minGroup1);
@@ -452,6 +456,59 @@ class WorkScheduleService
         }
         
         return [$groupDistribution, $minGroup1, $maxGroup2];
+    }
+
+    private function ensureCorrectShiftDistribution(Carbon $date): void
+    {
+        // Dapatkan shift pagi dan malam
+        $morningShiftIds = $this->shiftGroups[1] ?? [];
+        $eveningShiftIds = $this->shiftGroups[2] ?? [];
+        
+        if (empty($morningShiftIds) || empty($eveningShiftIds)) {
+            return;
+        }
+        
+        $dateStr = $date->format('Y-m-d');
+        
+        // Hitung karyawan di shift pagi dan malam
+        $morningStaffCount = WorkSchedule::where('date', $dateStr)
+            ->whereIn('shift_id', $morningShiftIds)
+            ->count();
+            
+        $eveningStaffCount = WorkSchedule::where('date', $dateStr)
+            ->whereIn('shift_id', $eveningShiftIds)
+            ->count();
+        
+        // Jika shift malam memiliki lebih banyak atau sama dengan shift pagi
+        if ($morningStaffCount <= $eveningStaffCount) {
+            // Pindahkan karyawan dari shift malam ke pagi
+            $staffToMove = min(
+                $eveningStaffCount - $morningStaffCount + 1,
+                $eveningStaffCount - 1
+            );
+            
+            if ($staffToMove > 0) {
+                // Cari karyawan rotatable dari shift malam yang bisa dipindahkan
+                $movableStaff = DB::table('work_schedules')
+                    ->join('employees', 'work_schedules.employee_id', '=', 'employees.id')
+                    ->where('work_schedules.date', $dateStr)
+                    ->whereIn('work_schedules.shift_id', $eveningShiftIds)
+                    ->where('employees.rotated', true)
+                    ->select('work_schedules.id', 'work_schedules.employee_id')
+                    ->limit($staffToMove)
+                    ->get();
+                
+                foreach ($movableStaff as $staff) {
+                    // Pilih shift pagi secara acak
+                    $morningShiftId = $morningShiftIds[array_rand($morningShiftIds)];
+                    
+                    // Update jadwal
+                    WorkSchedule::where('id', $staff->id)->update([
+                        'shift_id' => $morningShiftId
+                    ]);
+                }
+            }
+        }
     }
 
     /**
@@ -584,37 +641,38 @@ class WorkScheduleService
      */
     private function firstGroupRequiresMoreStaff(): bool
     {
-        if (count($this->shiftGroups) < 2 || empty($this->shiftGroups[1]) || empty($this->shiftGroups[2])) {
-            return false;
-        }
+        return true;
+        // if (count($this->shiftGroups) < 2 || empty($this->shiftGroups[1]) || empty($this->shiftGroups[2])) {
+        //     return false;
+        // }
         
-        try {
-            $shift1 = Shift::find($this->shiftGroups[1][0]);
-            $shift2 = Shift::find($this->shiftGroups[2][0]);
+        // try {
+        //     $shift1 = Shift::find($this->shiftGroups[1][0]);
+        //     $shift2 = Shift::find($this->shiftGroups[2][0]);
             
-            if (!$shift1 || !$shift2) {
-                return false;
-            }
+        //     if (!$shift1 || !$shift2) {
+        //         return false;
+        //     }
             
-            $start1 = Carbon::parse($shift1->start_time);
-            $end1 = Carbon::parse($shift1->end_time);
-            $start2 = Carbon::parse($shift2->start_time);
-            $end2 = Carbon::parse($shift2->end_time);
+        //     $start1 = Carbon::parse($shift1->start_time);
+        //     $end1 = Carbon::parse($shift1->end_time);
+        //     $start2 = Carbon::parse($shift2->start_time);
+        //     $end2 = Carbon::parse($shift2->end_time);
             
-            // Shift 1 adalah shift "pagi" jika dimulai antara 05:00-12:00 
-            // dan berakhir antara 15:00-22:00
-            $isGroup1DayShift = $start1->hour >= 5 && $start1->hour <= 12 && 
-                               ($end1->hour >= 15 && $end1->hour <= 22);
+        //     // Shift 1 adalah shift "pagi" jika dimulai antara 05:00-12:00 
+        //     // dan berakhir antara 15:00-22:00
+        //     $isGroup1DayShift = $start1->hour >= 5 && $start1->hour <= 12 && 
+        //                        ($end1->hour >= 15 && $end1->hour <= 22);
             
-            // Shift 2 adalah shift "malam" jika dimulai setelah 15:00
-            // atau berakhir sebelum 09:00 (menandakan shift yang melewati tengah malam)
-            $isGroup2NightShift = $start2->hour >= 15 || $end2->hour <= 9;
+        //     // Shift 2 adalah shift "malam" jika dimulai setelah 15:00
+        //     // atau berakhir sebelum 09:00 (menandakan shift yang melewati tengah malam)
+        //     $isGroup2NightShift = $start2->hour >= 15 || $end2->hour <= 9;
             
-            return $isGroup1DayShift && $isGroup2NightShift;
-        } catch (\Exception $e) {
-            Log::warning("Error in firstGroupRequiresMoreStaff: " . $e->getMessage());
-            return false;
-        }
+        //     return $isGroup1DayShift && $isGroup2NightShift;
+        // } catch (\Exception $e) {
+        //     Log::warning("Error in firstGroupRequiresMoreStaff: " . $e->getMessage());
+        //     return false;
+        // }
     }
     
     /**
@@ -630,6 +688,14 @@ class WorkScheduleService
         $endDate = $startDate->copy()->addDays(6);
         $currentDate = $startDate->copy();
         
+        $employeeIds = $this->getAllEmployeeIds($employeeGroups);
+        $fixedShiftEmployees = Employee::select('id', 'shift_id', 'rotated')
+            ->whereIn('id', $employeeIds)
+            ->where('rotated', false)
+            ->whereNotNull('shift_id')
+            ->get()
+            ->keyBy('id');
+
         while ($currentDate->lte($endDate)) {
             foreach ($employeeGroups as $groupId => $employeeIds) {
                 if (!isset($this->shiftGroups[$groupId])) continue;
@@ -959,6 +1025,12 @@ class WorkScheduleService
     private function createSchedule(int $employeeId, int $shiftId, Carbon $date): void
     {
         try {
+            $employee = Employee::select('id', 'rotated', 'shift_id', 'is_admin')
+            ->find($employeeId);
+
+            if ($employee && !$employee->rotated && $employee->shift_id) {
+                $shiftId = $employee->shift_id;
+            }
             // Periksa jika perlu periode istirahat antara shift
             $needsRestPeriod = $this->needsRestPeriodBetweenShifts($employeeId, $shiftId, $date);
             
