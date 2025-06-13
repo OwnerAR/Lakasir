@@ -158,13 +158,11 @@ class AttendanceController extends Controller
         if (!$employee->foto_url && $request->filled('media')) {
             $mediaData = base64_decode($request->input('media'));
             $filename = 'employee_' . $employee->id . '_' . time() . '.jpg';
-            $path = 'uploads/employee_photos/' . $filename;
-            Storage::disk('public')->put($path, $mediaData);
-            $employee->foto_url = 'storage/' . $path;
+            Storage::disk('public')->put('employees/' . $filename, $mediaData);
+            $employee->foto_url = $filename;
             $employee->save();
         }
 
-        // Gunakan Redis key unik per user per hari
         $redisKey = 'whatsapp:attendance:' . $employee->id . ':' . now()->toDateString();
         $session = Redis::get($redisKey);
 
