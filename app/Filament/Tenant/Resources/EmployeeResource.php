@@ -75,6 +75,10 @@ class EmployeeResource extends Resource
                     ->label(__('Active'))
                     ->default(true)
                     ->translateLabel(),
+                Toggle::make('rotated')
+                    ->label(__('Rotated'))
+                    ->default(true)
+                    ->translateLabel(),
             ]);
     }
 

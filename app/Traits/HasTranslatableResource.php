@@ -8,7 +8,7 @@ use Illuminate\Contracts\Support\Htmlable;
 
 trait HasTranslatableResource
 {
-    public static function getNavigationItems(): array
+    public static function getNavigationItems(array $urlParameters = []): array
     {
         if (new self instanceof Page) {
             return self::pageNavigationItems();
@@ -38,7 +38,7 @@ trait HasTranslatableResource
             ->title();
     }
 
-    private static function pageNavigationItems(): array
+    private static function pageNavigationItems(array $urlParameters = []): array
     {
         return [
             NavigationItem::make(__(static::getNavigationLabel()))
@@ -54,7 +54,7 @@ trait HasTranslatableResource
         ];
     }
 
-    private static function resourceNavigationItems(): array
+    private static function resourceNavigationItems(array $urlParameters = []): array
     {
         return [
             NavigationItem::make(__(static::getNavigationLabel()))
