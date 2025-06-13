@@ -32,6 +32,10 @@ class EmployeeResource extends Resource
 
         return $form
             ->schema([
+                Toggle::make('is_admin')
+                    ->label(__('Admin'))
+                    ->default(false)
+                    ->translateLabel(),
                 Forms\Components\TextInput::make('employee_id')
                     ->label(__('Employee ID'))
                     ->unique(ignoreRecord: true)

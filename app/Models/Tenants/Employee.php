@@ -10,6 +10,7 @@ class Employee extends Model
 {
     use HasFactory;
     protected $fillable = [
+        'is_admin',
         'employee_id',
         'name',
         'whatsapp_id',
