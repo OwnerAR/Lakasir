@@ -730,20 +730,17 @@ class WorkScheduleService
         }
         
         if ($isTwoShiftPattern && $firstGroupHasPriority) {
-            if ($employeesPerGroup[1] < $employeesPerGroup[2]) {
+            if ($employeesPerGroup[1] <= $employeesPerGroup[2]) {
                 $employeesToMove = $employeesPerGroup[2] - $employeesPerGroup[1] + 1;
                 
-                $minGroup1 = ceil($totalEmployees * 0.55);
-                $maxGroup2 = floor($totalEmployees * 0.45);
+                $employeesToMove = min($employeesToMove, $employeesPerGroup[2] - $minEmployeesPerGroup);
                 
-                if ($employeesPerGroup[1] < $minGroup1 && $employeesPerGroup[2] > $maxGroup2) {
-                    $toMove = min($employeesPerGroup[2] - $maxGroup2, $minGroup1 - $employeesPerGroup[1]);
-                    
-                    for ($i = 0; $i < $toMove; $i++) {
-                        if (!empty($groups[2])) {
-                            $employeeToMove = array_pop($groups[2]);
-                            $groups[1][] = $employeeToMove;
-                        }
+                for ($i = 0; $i < $employeesToMove; $i++) {
+                    if (!empty($groups[2]) && $employeesPerGroup[2] > $minEmployeesPerGroup) {
+                        $employeeToMove = array_pop($groups[2]);
+                        $groups[1][] = $employeeToMove;
+                        $employeesPerGroup[2]--;
+                        $employeesPerGroup[1]++;
                     }
                 }
             }
@@ -755,11 +752,9 @@ class WorkScheduleService
                 $maxEmployees = 0;
                 
                 foreach ($employeesPerGroup as $gId => $gCount) {
-                    if ($gCount > $maxEmployees) {
-                        if (!($firstGroupHasPriority && $gId == 1 && $gCount <= ceil($totalEmployees * 0.55))) {
-                            $maxEmployees = $gCount;
-                            $maxGroupId = $gId;
-                        }
+                    if ($gCount > $maxEmployees && (!($firstGroupHasPriority && $gId == 1) || $gCount > 2)) {
+                        $maxEmployees = $gCount;
+                        $maxGroupId = $gId;
                     }
                 }
                 
@@ -770,6 +765,8 @@ class WorkScheduleService
                         if (!empty($groups[$maxGroupId])) {
                             $employeeToMove = array_pop($groups[$maxGroupId]);
                             $groups[$groupId][] = $employeeToMove;
+                            $employeesPerGroup[$maxGroupId]--;
+                            $employeesPerGroup[$groupId]++;
                         }
                     }
                 }
