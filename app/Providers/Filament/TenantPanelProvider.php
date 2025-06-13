@@ -43,6 +43,9 @@ use App\Filament\Tenant\Resources\EmployeeResource;
 use App\Filament\Tenant\Resources\AttendanceResource;
 use App\Filament\Tenant\Resources\PayrollResource;
 use App\Filament\Tenant\Resources\IntegrasiAPIResource;
+use App\Filament\Tenant\Resources\ShiftResource;
+use App\Filament\Tenant\Resources\WorkScheduleResource;
+use App\Filament\Tenant\Resources\WorkScheduleResource\Pages\GenerateSchedule;
 use App\Http\Middleware\LocalizationMiddleware;
 use App\Models\Tenants\About;
 use App\Tenant;
@@ -215,6 +218,9 @@ class TenantPanelProvider extends PanelProvider
                 $this->generateNavigationItem(EmployeeResource::class),
                 $this->generateNavigationItem(AttendanceResource::class),
                 $this->generateNavigationItem(PayrollResource::class),
+                $this->generateNavigationItem(ShiftResource::class),
+                $this->generateNavigationItem(WorkScheduleResource::class),
+                $this->generateNavigationItem(GenerateSchedule::class),
             ]),
             NavigationGroup::make(__('General'))->label('')->collapsible(false)->items([
                 $this->generateNavigationItem(VoucherResource::class, Voucher::class),
