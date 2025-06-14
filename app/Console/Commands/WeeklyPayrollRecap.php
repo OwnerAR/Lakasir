@@ -15,7 +15,9 @@ class WeeklyPayrollRecap extends Command
     public function __construct(
         protected TigaPutriService $tigaPutriService, 
         protected WhatsappService $whatsappService
-    ) {}
+    ) {
+        parent::__construct();
+    }
 
     public function handle()
     {
