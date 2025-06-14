@@ -921,23 +921,43 @@ class WorkScheduleService
      */
     private function isAdminShift(int $shiftId): bool
     {
+        static $adminShiftCache = [];
+        
+        if (isset($adminShiftCache[$shiftId])) {
+            return $adminShiftCache[$shiftId];
+        }
+        
         $shift = Shift::find($shiftId);
         
         if (!$shift) {
             return false;
         }
         
-        // Shift Admin ditandai dengan nama "Admin" atau mengandung kata "admin"
-        return stripos($shift->name, 'admin') !== false;
-    }
+        $isAdmin = stripos($shift->name, 'admin') !== false ||
+                stripos($shift->name, 'kantor') !== false ||
+                stripos($shift->name, 'office') !== false;
+                
+        $adminShiftCache[$shiftId] = $isAdmin;
+        return $isAdmin;
+        }
     
     /**
      * Memeriksa apakah karyawan adalah admin
      */
     private function isEmployeeAdmin(int $employeeId): bool
     {
-        $employee = Employee::find($employeeId);
-        return $employee ? $employee->is_admin : false;
+        static $employeeAdminCache = [];
+        
+        if (isset($employeeAdminCache[$employeeId])) {
+            return $employeeAdminCache[$employeeId];
+        }
+        
+        // Gunakan query yang lebih spesifik dan direct
+        $isAdmin = Employee::where('id', $employeeId)
+            ->value('is_admin') === 1; // Pastikan perbandingan ketat
+        
+        $employeeAdminCache[$employeeId] = $isAdmin;
+        return $isAdmin;
     }
 
     /**
@@ -1027,6 +1047,10 @@ class WorkScheduleService
         try {
             $employee = Employee::select('id', 'rotated', 'shift_id', 'is_admin')
             ->find($employeeId);
+            if (!$employee) {
+                Log::warning("Employee #{$employeeId} not found");
+                return;
+            }
 
             if ($employee && !$employee->rotated && $employee->shift_id) {
                 $shiftId = $employee->shift_id;

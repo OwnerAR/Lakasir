@@ -2,9 +2,9 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use App\Models\Tenants\Employee;
-use App\Models\Tenants\Attendance;
 use App\Models\Tenants\Payroll;
+use App\Services\TigaPutriService;
+use App\Services\WhatsappService;
 use Carbon\Carbon;
 
 class WeeklyPayrollRecap extends Command
@@ -12,30 +12,53 @@ class WeeklyPayrollRecap extends Command
     protected $signature = 'payroll:weekly-recap';
     protected $description = 'Rekap payroll mingguan berdasarkan attendance';
 
+    public function __construct(
+        protected TigaPutriService $tigaPutriService, 
+        protected WhatsappService $whatsappService
+    ) {}
+
     public function handle()
     {
-        $startOfWeek = Carbon::now()->startOfWeek(Carbon::SUNDAY); // hari Minggu
-        $endOfWeek = Carbon::now()->endOfWeek(Carbon::SATURDAY);     // hari Sabtu
-
-        $employees = Employee::where('is_active', true)->get();
-
-        foreach ($employees as $employee) {
-            $workDays = Attendance::where('employee_id', $employee->id)
-                ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
-                ->count();
-
-            if ($workDays > 0) {
-                $salaryPerDay = $employee->salary / 29;
-                $amount = $workDays * $salaryPerDay;
-
-                Payroll::create([
-                    'employee_id' => $employee->id,
-                    'amount' => round($amount, 2),
-                    'period' => $startOfWeek->toDateString(),
-                    'status' => 'unpaid',
-                ]);
+        try {
+            $service = $this->tigaPutriService;
+            $this->info('Mulai merekap payroll mingguan...');
+            $payrolls = Payroll::where('status', 'unpaid')->get();
+            if ($payrolls->isEmpty()) {
+                $this->info('Tidak ada payroll yang perlu direkap.');
+                return;
             }
+            foreach ($payrolls as $payroll) {
+                $amountParse = str_replace('.00', '', $payroll->amount);
+                if ($payroll->status != 'unpaid') {
+                    $this->warn("Payroll untuk karyawan {$payroll->employee->name} sudah terbayar.");
+                    continue;
+                }
+                $response = $service->commandNonTransaction(
+                    'TS.' . $payroll->employee->employee_id . '.' . $amountParse,
+                    Carbon::now()->format('His'),
+                );
+                if ($response) {
+                    $payroll->update(['status' => 'paid']);
+                    $this->info("Payroll untuk karyawan {$payroll->employee->name} berhasil di kirim.");
+                    
+                    // Kirim notifikasi WhatsApp
+                    $NotificationService = $this->whatsappService;
+                    $message = "Payroll Anda telah berhasil direkap. Jumlah: Rp" . number_format($payroll->amount, 2, ',', '.');
+                    $NotificationService->sendMessage($payroll->employee->whatsapp_id, $message);
+                } else {
+                    $this->error("Gagal merekap payroll untuk karyawan {$payroll->employee->name}.");
+                    // Kirim notifikasi WhatsApp jika gagal
+                    $NotificationService = $this->whatsappService;
+                    $message = "Gagal merekap payroll Anda. Silakan hubungi admin.";
+                    $NotificationService->sendMessage($payroll->employee->whatsapp_id, $message);
+                }
+
+            }
+        } catch (\Exception $e) {
+            $this->error('Terjadi kesalahan: ' . $e->getMessage());
+            return;
         }
+
 
         $this->info('Payroll mingguan berhasil direkap.');
     }
