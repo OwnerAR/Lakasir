@@ -37,6 +37,8 @@ use App\Policies\Tenants\VoucherPolicy;
 use App\Policies\Tenants\AttendancePolicy;
 use App\Policies\Tenants\EmployeePolicy;
 use App\Policies\Tenants\PayrollPolicy;
+use App\Policies\Tenants\ShiftPolicy;
+use App\Policies\Tenants\WorkSchedulePolicy;
 use App\Tenant;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
@@ -76,6 +78,8 @@ class AuthServiceProvider extends ServiceProvider
         Attendance::class => AttendancePolicy::class,
         Employee::class => EmployeePolicy::class,
         Payroll::class => PayrollPolicy::class,
+        Shift::class => ShiftPolicy::class,
+        WorkSchedule::class => WorkSchedulePolicy::class,
     ];
 
     public function register()
