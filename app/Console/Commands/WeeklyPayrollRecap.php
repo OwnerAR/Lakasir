@@ -30,7 +30,7 @@ class WeeklyPayrollRecap extends Command
                 return;
             }
             foreach ($payrolls as $payroll) {
-                $amountParse = str_replace('.00', '', $payroll->amount);
+                $amountParse = ceil($payroll->amount);
                 if ($payroll->status != 'unpaid') {
                     $this->warn("Payroll untuk karyawan {$payroll->employee->name} sudah terbayar.");
                     continue;
