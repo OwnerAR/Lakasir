@@ -85,5 +85,28 @@ return [
     */
 
     'livewire_loading_delay' => 'default',
+    /*
+    |--------------------------------------------------------------------------
+    | Recap Time
+    |--------------------------------------------------------------------------
+    |
+    | This is the default time for the weekly payroll and attendance recap.
+    |
+    */
+    'tenancy' => [
+
+        'payroll' => [
+            'recap_time' => env('PAYROLL_RECAP_TIME', '01:00'),
+        ],
+
+        'attendance' => [
+            'recap_time' => env('ATTENDANCE_RECAP_TIME', '01:00'),
+        ],
+
+        'schedule' => [
+            'recap_time' => env('SCHEDULE_RECAP_TIME', '00:00'),
+        ],
+
+    ],
 
 ];

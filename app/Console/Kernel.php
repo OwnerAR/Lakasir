@@ -16,9 +16,9 @@ class Kernel extends ConsoleKernel
     {
         $schedule->command(DeleteTempFile::class)->daily();
         $schedule->command(FCM::class)->daily();
-        $schedule->command(WeeklyPayrollRecap::class)->weeklyOn(7, '00:00');
-        $schedule->command(WeeklyAttendanceRecap::class)->weeklyOn(7, '01:00');
-        $schedule->command(DailyScheduleRecap::class)->dailyAt('00:00');
+        $schedule->command(WeeklyAttendanceRecap::class)->weeklyOn(7, config('filament.tenancy.attendance.recap_time', '00:00'));
+        $schedule->command(WeeklyPayrollRecap::class)->weeklyOn(7, config('filament.tenancy.payroll.recap_time', '01:00'));
+        $schedule->command(DailyScheduleRecap::class)->dailyAt(config('filament.tenancy.schedule.recap_time', '02:00'));
     }
 
     protected function commands()
