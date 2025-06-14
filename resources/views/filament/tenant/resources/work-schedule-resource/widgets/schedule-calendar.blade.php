@@ -2,7 +2,7 @@
     <x-filament::section class="p-0 m-0" style="width: 100% !important; max-width: none !important; padding: 0 !important; margin: 0 !important;">
         <div class="w-full" style="width: 100% !important; max-width: none !important;">
             <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-medium">{{ __('Work Schedule Calendar') }}</h3>
+                <h3 class="text-lg font-medium">{{ __('Calendar') }}</h3>
                 <div class="flex space-x-2">
                     <button wire:click="prevWeek" class="px-3 py-1 bg-gray-200 rounded text-gray-700 hover:bg-gray-300">
                         &larr; {{ __('Previous Week') }}

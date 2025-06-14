@@ -1,9 +1,5 @@
 <x-filament::page>
-    <x-filament::card>
-        <h2 class="text-xl font-bold tracking-tight sm:text-2xl">
-            {{ __('Generate Work Schedule') }}
-        </h2>
-        
+    <x-filament::card>        
         <p class="mt-2 text-sm text-gray-500">
             {{ __('Generate work schedules for employees with rolling shifts each week. The system will ensure employees have adequate rest time between shifts.') }}
         </p>
