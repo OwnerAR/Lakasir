@@ -19,6 +19,8 @@ use App\Models\Tenants\Voucher;
 use App\Models\Tenants\Attendance;
 use App\Models\Tenants\Employee;
 use App\Models\Tenants\Payroll;
+use App\Models\Tenants\Shift;
+use App\Models\Tenants\WorkSchedule;
 use App\Policies\Tenants\CategoryPolicy;
 use App\Policies\Tenants\MemberPolicy;
 use App\Policies\Tenants\PaymentMethodPolicy;
