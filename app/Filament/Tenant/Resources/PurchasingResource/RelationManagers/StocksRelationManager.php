@@ -45,6 +45,7 @@ class StocksRelationManager extends RelationManager
         ->columns(1);
     }
 
+
     public function table(Table $table): Table
     {
         $disabled = $this->getOwnerRecord()->status == PurchasingStatus::approved;
