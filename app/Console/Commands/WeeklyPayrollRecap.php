@@ -3,6 +3,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use App\Models\Tenants\Payroll;
+use App\Models\Tenants\Attendance;
 use App\Services\TigaPutriService;
 use App\Services\WhatsappService;
 use Carbon\Carbon;
@@ -42,6 +43,9 @@ class WeeklyPayrollRecap extends Command
                 if ($response) {
                     $payroll->update(['status' => 'paid']);
                     $this->info("Payroll untuk karyawan {$payroll->employee->name} berhasil di kirim.");
+                    Attendance::where('employee_id', $payroll->employee->id)
+                        ->where('status', 'processed')
+                        ->update(['status' => 'paid']);
                     
                     // Kirim notifikasi WhatsApp
                     $NotificationService = $this->whatsappService;

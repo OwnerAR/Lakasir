@@ -2,29 +2,50 @@
 
 namespace App\Filament\Tenant\Resources\WorkScheduleResource\Widgets;
 
+use App\Models\Tenants\Employee;
+use App\Models\Tenants\Shift;
 use App\Models\Tenants\WorkSchedule;
+use Carbon\Carbon;
+use Filament\Forms\Form;  // Tambahkan ini
+use Filament\Actions\Action;
+use Filament\Actions\Concerns\InteractsWithActions;
+use Filament\Actions\Contracts\HasActions;
+use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Concerns\InteractsWithForms;
+use Filament\Forms\Contracts\HasForms;
 use Filament\Widgets\Widget;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+
+
 
 class ScheduleCalendar extends Widget
 {
+    use InteractsWithActions;
+    use InteractsWithForms;
     protected static string $view = 'filament.tenant.resources.work-schedule-resource.widgets.schedule-calendar';
     
     protected int | string | array $columnSpan = 'full';
-    protected static ?string $wrapperClasses = 'full-width-widget';
+    
     
     public $weekStart;
     public $weekEnd;
     public $currentDate;
     public $scheduleData = [];
+
+    protected $listeners = ['refreshCalendar' => 'loadWeekSchedule'];
+    
     
     public function mount()
     {
-        $this->currentDate = now();
+        $this->currentDate = Carbon::now();
+        $this->weekStart = Carbon::now()->startOfWeek(Carbon::MONDAY);
+        $this->weekEnd = Carbon::now()->endOfWeek(Carbon::SUNDAY);
+        
+        // Load data untuk kalendar
         $this->loadWeekSchedule();
     }
-    
+
     public function nextWeek()
     {
         $this->currentDate = $this->currentDate->addWeek();
@@ -66,6 +87,7 @@ class ScheduleCalendar extends Widget
             $date = $schedule->date->format('Y-m-d');
             if (!isset($this->scheduleData[$date]['shifts'][$schedule->shift_id])) {
                 $this->scheduleData[$date]['shifts'][$schedule->shift_id] = [
+                    'shift_id' => $schedule->shift_id,
                     'shift_name' => $schedule->shift->name,
                     'shift_time' => $schedule->shift->start_time . ' - ' . $schedule->shift->end_time,
                     'employees' => []
@@ -73,9 +95,110 @@ class ScheduleCalendar extends Widget
             }
             
             $this->scheduleData[$date]['shifts'][$schedule->shift_id]['employees'][] = [
+                'id' => $schedule->employee->id,
                 'name' => $schedule->employee->name,
                 'status' => $schedule->status
             ];
         }
+    }
+
+    public function editScheduleAction(): Action
+    {
+        return Action::make('editSchedule')
+            ->label(fn (array $arguments) => $arguments['employeeName'] ?? 'Edit')
+            ->mountUsing(function (Action $action, array $arguments) {
+                // Fill form with data from arguments
+                $action->form->fill([
+                    'employeeId' => $arguments['employeeId'] ?? null,
+                    'shiftId' => $arguments['shiftId'] ?? null,
+                    'date' => $arguments['date'] ?? null,
+                ]);
+                
+                // Look up existing schedule if any
+                if (isset($arguments['date']) && isset($arguments['employeeId'])) {
+                    $schedule = WorkSchedule::where('date', $arguments['date'])
+                        ->where('employee_id', $arguments['employeeId'])
+                        ->first();
+                    
+                    if ($schedule) {
+                        $action->record($schedule);
+                    }
+                }
+            })
+            ->form([
+                Select::make('employeeId')
+                    ->label('Employee')
+                    ->options(function () {
+                        return Employee::where('is_active', true)->pluck('name', 'id');
+                    })
+                    ->required(),
+                Select::make('shiftId')
+                    ->label('Shift')
+                    ->options(function () {
+                        return Shift::pluck('name', 'id');
+                    })
+                    ->required(),
+                Hidden::make('date'),
+            ])
+            ->action(function (array $data, ?WorkSchedule $record) {
+                try {
+                    if ($record) {
+                        // Update existing schedule
+                        $record->update([
+                            'employee_id' => $data['employeeId'],
+                            'shift_id' => $data['shiftId'],
+                        ]);
+                        
+                        $this->dispatch('notify', [
+                            'type' => 'success',
+                            'message' => 'Schedule updated successfully',
+                        ]);
+                    } else {
+                        // Create new schedule
+                        WorkSchedule::create([
+                            'employee_id' => $data['employeeId'],
+                            'shift_id' => $data['shiftId'],
+                            'date' => $data['date'],
+                            'status' => 'scheduled',
+                        ]);
+                        
+                        $this->dispatch('notify', [
+                            'type' => 'success',
+                            'message' => 'Schedule created successfully',
+                        ]);
+                    }
+                    
+                    // Refresh schedule data
+                    $this->loadWeekSchedule();
+                } catch (\Exception $e) {
+                    Log::error('Failed to save schedule: ' . $e->getMessage());
+                    
+                    $this->dispatch('notify', [
+                        'type' => 'danger',
+                        'message' => 'Failed to save schedule: ' . $e->getMessage(),
+                    ]);
+                }
+            });
+    }
+
+    public static function canView(): bool
+    {
+        return true;
+    }
+
+    // Render method
+    protected function getHeaderWidgets(): array
+    {
+        return [];
+    }
+
+    public function getEmployeesProperty()
+    {
+        return Employee::where('is_active', true)->get();
+    }
+    
+    public function getShiftsProperty()
+    {
+        return Shift::all();
     }
 }

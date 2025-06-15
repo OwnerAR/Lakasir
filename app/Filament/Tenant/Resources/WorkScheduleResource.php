@@ -94,12 +94,6 @@ class WorkScheduleResource extends Resource
             //
         ];
     }
-    public static function getWidgets(): array
-    {
-        return [
-            ScheduleCalendar::class,
-        ];
-    }
 
     public static function getPages(): array
     {
@@ -108,6 +102,7 @@ class WorkScheduleResource extends Resource
             'create' => Pages\CreateWorkSchedule::route('/create'),
             'edit' => Pages\EditWorkSchedule::route('/{record}/edit'),
             'generate' => Pages\GenerateSchedule::route('/generate'),
+            'calendar' => Pages\CalendarWorkSchedule::route('/calendar'),
         ];
     }
 }

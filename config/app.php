@@ -187,7 +187,7 @@ return [
         Illuminate\Translation\TranslationServiceProvider::class,
         Illuminate\Validation\ValidationServiceProvider::class,
         Illuminate\View\ViewServiceProvider::class,
-
+    
         /*
          * Package Service Providers...
          */
@@ -204,6 +204,7 @@ return [
         App\Providers\TenancyServiceProvider::class,
         Barryvdh\LaravelIdeHelper\IdeHelperServiceProvider::class,
         App\Providers\Filament\TenantPanelProvider::class,
+        Livewire\LivewireServiceProvider::class,
     ],
 
     /*

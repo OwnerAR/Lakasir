@@ -18,15 +18,4 @@ class ListWorkSchedules extends ListRecords
             Actions\CreateAction::make(),
         ];
     }
-    public function getHeaderWidgetsColumns(): int
-    {
-        return 1; // Force to use a single column
-    }
-
-    protected function getHeaderWidgets(): array
-    {
-        return [
-            ScheduleCalendar::class,
-        ];
-    }
 }
