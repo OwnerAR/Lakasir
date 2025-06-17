@@ -62,6 +62,74 @@
               <td class="p-2 border text-center text-primary">{{ Number::currency($detail->total_price, Setting::get('currency', 'IDR')) }}</td>
             </tr>
           @endforeach
+          @if($record->returnSellings->isNotEmpty())
+            <tr>
+              <td colspan="5" class="p-2 border">
+                <div class="mt-4 mb-2">
+                  <h3 class="font-semibold text-lg text-red-600">@lang('Returned Products')</h3>
+                </div>
+                
+                @foreach($record->returnSellings as $return)
+                  <div class="bg-red-50 rounded-md p-3 mb-3 border border-red-200">
+                    <div class="flex justify-between items-center mb-2">
+                      <div>
+                        <span class="text-sm font-semibold">@lang('Return #'){{ $return->return_number }}</span>
+                        <span class="text-xs text-gray-500 ml-2">{{ $return->created_at->format('d M Y H:i') }}</span>
+                      </div>
+                      <div>
+                        <span class="px-2 py-1 text-xs rounded-full {{ $return->status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800' }}">
+                          {{ ucfirst($return->status) }}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <table class="w-full text-sm">
+                      <thead class="bg-red-100 text-red-800">
+                        <tr>
+                          <th class="p-1 border-b text-left">@lang('Product')</th>
+                          <th class="p-1 border-b text-center">@lang('Qty')</th>
+                          <th class="p-1 border-b text-center">@lang('Price')</th>
+                          <th class="p-1 border-b text-center">@lang('Subtotal')</th>
+                          <th class="p-1 border-b text-left">@lang('Reason')</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @foreach($return->returnDetails as $detail)
+                          <tr>
+                            <td class="p-1 border-b">{{ $detail->product->name }}</td>
+                            <td class="p-1 border-b text-center">{{ $detail->quantity }}</td>
+                            <td class="p-1 border-b text-right">{{ Number::currency($detail->price, Setting::get('currency', 'IDR')) }}</td>
+                            <td class="p-1 border-b text-right">{{ Number::currency($detail->subtotal, Setting::get('currency', 'IDR')) }}</td>
+                            <td class="p-1 border-b">{{ $detail->reason }}</td>
+                          </tr>
+                        @endforeach
+                      </tbody>
+                      <tfoot>
+                        <tr>
+                          <td colspan="3" class="text-right p-1 font-semibold">@lang('Total Return Amount'):</td>
+                          <td colspan="2" class="text-right p-1 font-semibold text-red-600">
+                            {{ Number::currency($return->total_amount, Setting::get('currency', 'IDR')) }}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td colspan="3" class="text-right p-1 text-sm">@lang('Refund Method'):</td>
+                          <td colspan="2" class="text-right p-1 text-sm">
+                            {{ ucfirst(str_replace('_', ' ', $return->refund_method)) }}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                    
+                    @if($return->return_reason)
+                      <div class="mt-2 text-sm">
+                        <span class="font-semibold">@lang('Additional Notes'):</span> {{ $return->return_reason }}
+                      </div>
+                    @endif
+                  </div>
+                @endforeach
+              </td>
+            </tr>
+          @endif
         </tbody>
         <tfoot class="font-semibold">
           <tr>

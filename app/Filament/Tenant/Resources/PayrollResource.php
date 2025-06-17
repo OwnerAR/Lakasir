@@ -70,6 +70,7 @@ class PayrollResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->defaultSort('period', 'desc')
             ->columns([
                 TextColumn::make('employee.name')
                     ->label(__('Employee'))

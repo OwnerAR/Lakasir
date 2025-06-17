@@ -66,4 +66,9 @@ class Selling extends Model
     {
         return $this->belongsTo(Table::class);
     }
+
+    public function returnSellings()
+    {
+        return $this->hasMany(ReturnSelling::class);
+    }
 }

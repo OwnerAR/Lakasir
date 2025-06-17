@@ -64,7 +64,6 @@ class EmployeeResource extends Resource
                     ->required()
                     ->numeric()
                     ->translateLabel(),
-                // Upload profile picture
                 Forms\Components\FileUpload::make('foto_url')
                     ->label(__('Profile Picture'))
                     ->disk('public')

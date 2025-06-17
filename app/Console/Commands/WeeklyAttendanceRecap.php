@@ -37,7 +37,6 @@ class WeeklyAttendanceRecap extends Command
                     continue;
                 }
                 $workDays = Attendance::where('employee_id', $employee->id)
-                        ->whereBetween('date', [$startOfWeek->toDateString(), $endOfWeek->toDateString()])
                         ->whereIn('status', ['present', 'late'])
                         ->count();
 
@@ -54,7 +53,6 @@ class WeeklyAttendanceRecap extends Command
                         ]);
                         // update attendance status
                         Attendance::where('employee_id', $employee->id)
-                                    ->whereBetween('date', [$startOfWeek->toDateString(), $endOfWeek->toDateString()])
                                     ->whereIn('status', ['present', 'late'])
                                     ->update(['status' => 'processed']);
                                 
