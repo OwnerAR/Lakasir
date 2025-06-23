@@ -1,7 +1,10 @@
 @import '/vendor/filament/filament/resources/css/theme.css';
 @config '../../../../tailwind.config.js';
 
-
+.fi-sidebar {
+  @apply left-0;
+  position: fixed !important;
+}
 .fi-sidebar-nav {
   @apply bg-white drop-shadow-md dark:bg-gray-900;
 }

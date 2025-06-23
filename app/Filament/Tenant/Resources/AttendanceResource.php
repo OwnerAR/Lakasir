@@ -49,8 +49,15 @@ class AttendanceResource extends Resource
                     ->label(__('Clock Out'))
                     ->translateLabel()
                     ->time(),
-                TextInput::make('status')
+                Select::make('status')
                     ->label(__('Status'))
+                    ->options([
+                        'present' => __('Present'),
+                        'absent' => __('Absent'),
+                        'late' => __('Late'),
+                    ])
+                    ->default('present')
+                    ->required()
                     ->translateLabel(),
             ])->columns(2);
     }
@@ -85,6 +92,13 @@ class AttendanceResource extends Resource
                 TextColumn::make('status')
                     ->searchable()
                     ->translateLabel()
+                    ->badge()
+                    ->color(fn ($state) => match ($state) {
+                        'present' => 'success',
+                        'absent' => 'danger',
+                        'late' => 'warning',
+                        default => 'secondary',
+                    })
                     ->sortable(),
                 TextColumn::make('updated_at')
                     ->dateTime()

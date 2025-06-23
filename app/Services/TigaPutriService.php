@@ -5,6 +5,7 @@ namespace App\Services;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use App\Models\Tenants\IntegrasiAPI;
+use Illuminate\Support\Facades\Schema;
 
 class TigaPutriService
 {
@@ -14,8 +15,12 @@ class TigaPutriService
 
     public function __construct()
     {
-        $this->credential = IntegrasiAPI::where('type', $this->type)->first();
-        $this->baseurl = $this->credential?->base_url ?? '';
+        if (Schema::hasTable('integrasi_api')) {
+            $this->credential = IntegrasiAPI::where('type', $this->type)->first();
+            $this->baseurl = $this->credential?->base_url ?? '';
+        } else {
+            Log::error('Integrasi API table does not exist.');
+        }
     }
 
     private function createSignatureTrx(
