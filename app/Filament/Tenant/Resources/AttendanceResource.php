@@ -16,6 +16,9 @@ use Filament\Forms\Components\TextInputColumn;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\TimePicker;
+use Filament\Forms\Components\Select;
+use Filament\Tables\Filters;
+use Filament\Tables\Actions;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Illuminate\Database\Eloquent\Builder;
@@ -97,6 +100,7 @@ class AttendanceResource extends Resource
                         'present' => 'success',
                         'absent' => 'danger',
                         'late' => 'warning',
+                        'paid' => 'info',
                         default => 'secondary',
                     })
                     ->sortable(),
