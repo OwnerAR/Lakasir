@@ -58,7 +58,6 @@ class AttendanceResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->where('status', '!=', 'paid')
             ->columns([
                 Tables\Columns\TextColumn::make('id')
                     ->searchable()

@@ -71,7 +71,6 @@ class PayrollResource extends Resource
     {
         return $table
             ->defaultSort('period', 'desc')
-            ->where('status', '!=', 'paid')
             ->columns([
                 TextColumn::make('employee.name')
                     ->label(__('Employee'))
