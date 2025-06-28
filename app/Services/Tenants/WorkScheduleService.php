@@ -146,12 +146,12 @@ class WorkScheduleService
                 $startTime = Carbon::parse($shift->start_time);
                 $hour = (int) $startTime->format('H');
                 
-                if ($hour >= 5 && $hour < 12) {
+                if ($hour >= 6 && $hour < 12) {
                     $morningShifts[] = $shift->id;
-                } elseif ($hour >= 12 && $hour < 18) {
+                } elseif ($hour >= 12 && $hour < 15) {
                     $afternoonShifts[] = $shift->id;
-                } else {
-                    $nightShifts[] = $shift->id;
+                } elseif ($hour >= 15 || $hour < 3) {
+                    $eveningShifts[] = $shift->id;
                 }
             } catch (\Exception $e) {
                 Log::warning("Invalid time format for shift ID {$shift->id}: {$e->getMessage()}");
@@ -169,12 +169,23 @@ class WorkScheduleService
             $this->shiftGroups[$groupIndex++] = $afternoonShifts;
         }
         
-        if (!empty($nightShifts)) {
-            $this->shiftGroups[$groupIndex++] = $nightShifts;
+        if (!empty($eveningShifts)) {
+            $this->shiftGroups[$groupIndex++] = $eveningShifts;
         }
         
-        if (empty($this->shiftGroups)) {
-            $this->createFallbackShiftGroups($shifts);
+        // If less than 3 groups were created, create missing groups
+        while ($groupIndex <= 3) {
+            if (empty($this->shiftGroups[$groupIndex])) {
+                // Copy shifts from previous group if available
+                $previousGroup = $groupIndex - 1;
+                if (isset($this->shiftGroups[$previousGroup])) {
+                    $this->shiftGroups[$groupIndex] = $this->shiftGroups[$previousGroup];
+                } else {
+                    // Use first group's shifts as fallback
+                    $this->shiftGroups[$groupIndex] = $this->shiftGroups[1] ?? [];
+                }
+            }
+            $groupIndex++;
         }
     }
 
