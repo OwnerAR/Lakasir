@@ -135,7 +135,7 @@ class PayrollResource extends Resource
                     ->icon('heroicon-o-paper-airplane')
                     ->action(function (Payroll $record) {
                         try {
-                            $amountParse = str_replace('.00', '', $record->amount);
+                            $amountParse = ceil($record->amount);
                             $service = new TigaPutriService();
                             if ($record->status !== 'unpaid') {
                                 Notification::make()

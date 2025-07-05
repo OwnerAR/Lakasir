@@ -47,6 +47,8 @@ use App\Filament\Tenant\Resources\ShiftResource;
 use App\Filament\Tenant\Resources\WorkScheduleResource;
 use App\Filament\Tenant\Resources\WorkScheduleResource\Pages\GenerateSchedule;
 use App\Filament\Tenant\Resources\WorkScheduleResource\Pages\CalendarWorkSchedule;
+use App\Filament\Tenant\Resources\MessageResource;
+use App\Filament\Tenant\Resources\TicketResource;
 use App\Http\Middleware\LocalizationMiddleware;
 use App\Models\Tenants\About;
 use App\Tenant;
@@ -186,6 +188,8 @@ class TenantPanelProvider extends PanelProvider
             $this->generateNavigationItem(AttendanceResource::class, Attendance::class),
             $this->generateNavigationItem(PayrollResource::class, Payroll::class),
             $this->generateNavigationItem(IntegrasiAPIResource::class, IntegrasiAPI::class),
+            $this->generateNavigationItem(MessageResource::class),
+            $this->generateNavigationItem(TicketResource::class),
         ];
     }
 

@@ -32,6 +32,7 @@ use App\Livewire\ResetPassword;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
+use App\Http\Controllers\Api\Tenants\OmniChannel\MessageController as TenantOmniMessageController;
 
 Route::middleware([
     'web',
@@ -211,6 +212,10 @@ Route::middleware([
 
         Route::post('/attendance', [AttendanceController::class, 'storeAttendance'])
         ->middleware(['bot.api']);
+
+        Route::prefix('omni')->group(function () {
+            Route::post('/messages', [TenantOmniMessageController::class, 'receive']);
+        });
 
         Route::get('/', function () {
             return ['Laravel' => app()->version()];

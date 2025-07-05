@@ -6,6 +6,8 @@ use App\Models\Tenants\Employee;
 use App\Models\Tenants\Shift;
 use App\Models\Tenants\WorkSchedule;
 use App\Services\WhatsappService;
+use App\Services\Tenants\Helpers\EmployeeGroupHelper;
+use App\Services\Tenants\Helpers\ShiftGroupHelper;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -127,66 +129,7 @@ class WorkScheduleService
      */
     private function initializeShiftGroups(): void
     {
-        $this->shiftGroups = [];
-
-        $shifts = Shift::when($this->offShiftId, function ($query) {
-            return $query->where('id', '!=', $this->offShiftId);
-        })->get();
-        
-        if ($shifts->isEmpty()) {
-            return;
-        }
-
-        $morningShifts = [];
-        $afternoonShifts = [];
-        $nightShifts = [];
-        
-        foreach ($shifts as $shift) {
-            try {
-                $startTime = Carbon::parse($shift->start_time);
-                $hour = (int) $startTime->format('H');
-                
-                if ($hour >= 6 && $hour < 12) {
-                    $morningShifts[] = $shift->id;
-                } elseif ($hour >= 12 && $hour < 15) {
-                    $afternoonShifts[] = $shift->id;
-                } elseif ($hour >= 15 || $hour < 3) {
-                    $eveningShifts[] = $shift->id;
-                }
-            } catch (\Exception $e) {
-                Log::warning("Invalid time format for shift ID {$shift->id}: {$e->getMessage()}");
-                $nightShifts[] = $shift->id;
-            }
-        }
-
-        $groupIndex = 1;
-        
-        if (!empty($morningShifts)) {
-            $this->shiftGroups[$groupIndex++] = $morningShifts;
-        }
-        
-        if (!empty($afternoonShifts)) {
-            $this->shiftGroups[$groupIndex++] = $afternoonShifts;
-        }
-        
-        if (!empty($eveningShifts)) {
-            $this->shiftGroups[$groupIndex++] = $eveningShifts;
-        }
-        
-        // If less than 3 groups were created, create missing groups
-        while ($groupIndex <= 3) {
-            if (empty($this->shiftGroups[$groupIndex])) {
-                // Copy shifts from previous group if available
-                $previousGroup = $groupIndex - 1;
-                if (isset($this->shiftGroups[$previousGroup])) {
-                    $this->shiftGroups[$groupIndex] = $this->shiftGroups[$previousGroup];
-                } else {
-                    // Use first group's shifts as fallback
-                    $this->shiftGroups[$groupIndex] = $this->shiftGroups[1] ?? [];
-                }
-            }
-            $groupIndex++;
-        }
+        $this->shiftGroups = ShiftGroupHelper::initializeShiftGroups($this->offShiftId);
     }
 
     /**
@@ -238,7 +181,6 @@ class WorkScheduleService
             
             $currentDate = $startDate->copy();
             
-            // Generate jadwal untuk setiap minggu
             for ($week = 0; $week < $weeks; $week++) {
                 $this->generateWeeklySchedule($currentDate, $employeeGroups, $shifts);
                 $this->addDistributedRestDays($currentDate, $employeeGroups);
@@ -320,7 +262,6 @@ class WorkScheduleService
      */
     private function findAlternativeShiftForEmployee(int $employeeId, array $excludeShiftIds, Carbon $date): ?int
     {
-        // Cari shift dari grup yang sama, tapi bukan admin
         $employeeGroup = $this->getEmployeeGroup($employeeId);
         
         if ($employeeGroup && isset($this->shiftGroups[$employeeGroup])) {
@@ -331,7 +272,6 @@ class WorkScheduleService
             }
         }
         
-        // Jika tidak ditemukan, cari shift apapun yang bukan admin atau libur
         $alternativeShift = Shift::whereNotIn('id', $excludeShiftIds)
             ->when($this->offShiftId, function($query) {
                 return $query->where('id', '!=', $this->offShiftId);
@@ -365,10 +305,8 @@ class WorkScheduleService
      */
     private function initializeLastShifts(Collection $employees, Carbon $startDate): void
     {
-        // Ekstrak semua ID karyawan
         $employeeIds = $employees->pluck('id')->toArray();
         
-        // Ambil jadwal terakhir untuk semua karyawan dalam satu query
         $lastSchedules = WorkSchedule::whereIn('employee_id', $employeeIds)
             ->where('date', '<', $startDate->format('Y-m-d'))
             ->select('employee_id', 'shift_id', 'date')
@@ -395,47 +333,12 @@ class WorkScheduleService
      */
     private function divideEmployeesIntoGroups(Collection $employees): array
     {
-        $groups = [];
-        $totalEmployees = $employees->count();
-        
-        // Inisialisasi grup
-        foreach (array_keys($this->shiftGroups) as $groupId) {
-            $groups[$groupId] = [];
-        }
-        
-        if (empty($groups)) {
-            $groups[1] = [];
-            return $groups;
-        }
-        
-        $totalGroups = count($groups);
-        $isTwoShiftPattern = $totalGroups === 2;
-        $firstGroupHasPriority = $isTwoShiftPattern && $this->firstGroupRequiresMoreStaff();
-        
-        // Hitung rasio distribusi
-        list($groupDistribution, $minGroup1, $maxGroup2) = $this->calculateGroupDistribution(
-            $totalEmployees, 
-            $totalGroups, 
-            $isTwoShiftPattern, 
-            $firstGroupHasPriority
+        return EmployeeGroupHelper::divideEmployeesIntoGroups(
+            $employees,
+            $this->shiftGroups,
+            fn($shiftId) => $this->getShiftGroupId($shiftId),
+            fn() => $this->firstGroupRequiresMoreStaff()
         );
-        
-        // Tetapkan karyawan non-rotatable ke grup preferensi mereka
-        $assignedEmployees = $this->assignNonRotatableEmployees($employees, $groups);
-        $groupCounts = $this->countEmployeesPerGroup($groups);
-        
-        // Sesuaikan jika diperlukan untuk pola dua shift
-        if ($isTwoShiftPattern && $firstGroupHasPriority) {
-            $this->balanceFirstTwoGroups($groups, $groupCounts, $maxGroup2);
-        }
-        
-        // Tetapkan karyawan rotatable yang tersisa
-        $this->assignRotatableEmployees($employees, $groups, $groupCounts, $isTwoShiftPattern, $firstGroupHasPriority, $maxGroup2);
-        
-        // Pastikan tidak ada grup kosong jika memungkinkan
-        $this->ensureNoEmptyGroups($groups, $groupCounts, $totalEmployees);
-        
-        return $groups;
     }
 
     /**
@@ -446,13 +349,13 @@ class WorkScheduleService
         $groupDistribution = [];
         
         if ($isTwoShiftPattern && $firstGroupHasPriority) {
-            // Untuk shift pagi/malam dengan prioritas shift pagi:
-            // 65% karyawan di shift pagi, 35% di shift malam
-            $group1Ratio = 0.75;
+            $group1Ratio = 0.50;
             $group2Ratio = 0.25;
-            
+            $group3Ratio = 0.25;
+
             $minGroup1 = max(2, ceil($totalEmployees * $group1Ratio));
             $maxGroup2 = min(floor($totalEmployees * $group2Ratio), $totalEmployees - $minGroup1);
+            $maxGroup3 = min(floor($totalEmployees * $group3Ratio), $totalEmployees - $minGroup1 - $maxGroup2);
         } else {
             // Distribusikan karyawan secara merata
             $baseEmployeesPerGroup = floor($totalEmployees / $totalGroups);
@@ -464,9 +367,10 @@ class WorkScheduleService
             
             $minGroup1 = $groupDistribution[1] ?? $baseEmployeesPerGroup;
             $maxGroup2 = $groupDistribution[2] ?? $baseEmployeesPerGroup;
+            $maxGroup3 = $groupDistribution[3] ?? $baseEmployeesPerGroup;
         }
-        
-        return [$groupDistribution, $minGroup1, $maxGroup2];
+
+        return [$groupDistribution, $minGroup1, $maxGroup2, $maxGroup3];
     }
 
     private function ensureCorrectShiftDistribution(Carbon $date): void
@@ -474,8 +378,9 @@ class WorkScheduleService
         // Dapatkan shift pagi dan malam
         $morningShiftIds = $this->shiftGroups[1] ?? [];
         $eveningShiftIds = $this->shiftGroups[2] ?? [];
-        
-        if (empty($morningShiftIds) || empty($eveningShiftIds)) {
+        $nightShiftIds = $this->shiftGroups[3] ?? [];
+
+        if (empty($morningShiftIds) || empty($eveningShiftIds) || empty($nightShiftIds)) {
             return;
         }
         
@@ -488,6 +393,9 @@ class WorkScheduleService
             
         $eveningStaffCount = WorkSchedule::where('date', $dateStr)
             ->whereIn('shift_id', $eveningShiftIds)
+            ->count();
+        $nightStaffCount = WorkSchedule::where('date', $dateStr)
+            ->whereIn('shift_id', $nightShiftIds)
             ->count();
         
         // Jika shift malam memiliki lebih banyak atau sama dengan shift pagi
