@@ -53,7 +53,7 @@
                             @if (isset($dayData['shifts']) && is_array($dayData['shifts']) && count($dayData['shifts']) > 0)
                                 @foreach ($dayData['shifts'] as $shift)
                                     <div class="mb-3">
-                                        <div class="font-medium text-sm text-blue-600">{{ $shift['shift_name'] }}</div>
+                                        <div class="font-medium text-sm {{ $shift['off'] ? 'text-red-600' : 'text-blue-600' }}">{{ $shift['shift_name'] }}</div>
                                         <div class="text-xs text-gray-500">{{ $shift['shift_time'] }}</div>
                                         
                                         <ul class="mt-1 space-y-1">

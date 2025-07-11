@@ -29,8 +29,8 @@ class ScheduleCalendar extends Component
     public function mount()
     {
         $this->currentDate = Carbon::now();
-        $this->weekStart = $this->currentDate->copy()->startOfWeek(Carbon::MONDAY);
-        $this->weekEnd = $this->currentDate->copy()->endOfWeek(Carbon::SUNDAY);
+        $this->weekStart = $this->currentDate->copy()->startOfWeek(Carbon::SUNDAY);
+        $this->weekEnd = $this->currentDate->copy()->endOfWeek(Carbon::SATURDAY);
         $this->loadWeekSchedule();
     }
     
@@ -38,16 +38,16 @@ class ScheduleCalendar extends Component
     public function nextWeek()
     {
         $this->currentDate = $this->currentDate->copy()->addWeek();
-        $this->weekStart = $this->currentDate->copy()->startOfWeek(Carbon::MONDAY);
-        $this->weekEnd = $this->currentDate->copy()->endOfWeek(Carbon::SUNDAY);
+        $this->weekStart = $this->currentDate->copy()->startOfWeek(Carbon::SUNDAY);
+        $this->weekEnd = $this->currentDate->copy()->endOfWeek(Carbon::SATURDAY);
         $this->loadWeekSchedule();
     }
     
     public function prevWeek()
     {
         $this->currentDate = $this->currentDate->copy()->subWeek();
-        $this->weekStart = $this->currentDate->copy()->startOfWeek(Carbon::MONDAY);
-        $this->weekEnd = $this->currentDate->copy()->endOfWeek(Carbon::SUNDAY);
+        $this->weekStart = $this->currentDate->copy()->startOfWeek(Carbon::SUNDAY);
+        $this->weekEnd = $this->currentDate->copy()->endOfWeek(Carbon::SATURDAY);
         $this->loadWeekSchedule();
     }
     
@@ -100,6 +100,7 @@ class ScheduleCalendar extends Component
                         'shift_id' => $shiftId,
                         'shift_name' => $shift->name,
                         'shift_time' => $shift->start_time . ' - ' . $shift->end_time,
+                        'off' => $shift->off,
                         'employees' => []
                     ];
                 }
