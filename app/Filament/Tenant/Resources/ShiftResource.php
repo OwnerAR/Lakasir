@@ -29,6 +29,10 @@ class ShiftResource extends Resource
                     ->required(),
                 Forms\Components\TimePicker::make('end_time')
                     ->required(),
+                Forms\Components\Toggle::make('off')
+                    ->required(),
+                Forms\Components\Toggle::make('admin')
+                    ->required(),
             ]);
     }
 
@@ -41,6 +45,7 @@ class ShiftResource extends Resource
                     ->time(),
                 Tables\Columns\TextColumn::make('end_time')
                     ->time(),
+                Tables\Columns\ToggleColumn::make('off'),
             ])
             ->filters([
                 //

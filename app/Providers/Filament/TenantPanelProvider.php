@@ -89,8 +89,14 @@ class TenantPanelProvider extends PanelProvider
         parent::register();
         DatePicker::configureUsing(function (DatePicker $datePicker): void {
             $datePicker
+                ->native(false)
+                ->displayFormat('d F Y')
                 ->closeOnDateSelection()
-                ->native(false);
+                ->timezone(config('app.timezone'))
+                ->firstDayOfWeek(1) // Monday
+                ->afterStateUpdated(function ($state) {
+                    return $state;
+                });
         });
 
     }

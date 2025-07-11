@@ -28,12 +28,7 @@ class WorkScheduleService
     {
         $this->whatsappService = $whatsappService;
 
-        $offShift = Shift::where(function($query) {
-            $query->where('name', 'like', '%off%')
-                ->orWhere('name', 'like', '%libur%')
-                ->orWhere('name', 'like', '%rest%')
-                ->orWhere('name', 'like', '%free%');
-        })->first();
+        $offShift = Shift::where('off', true)->first();
             
         if ($offShift) {
             $this->offShiftId = $offShift->id;
@@ -42,7 +37,8 @@ class WorkScheduleService
                 $newOffShift = Shift::create([
                     'name' => 'Off Day',
                     'start_time' => '00:00:00',
-                    'end_time' => '23:59:00'
+                    'end_time' => '23:59:00',
+                    'off' => true
                 ]);
                 $this->offShiftId = $newOffShift->id;
             } catch (\Exception $e) {
@@ -167,9 +163,26 @@ class WorkScheduleService
                 
             $shifts = Shift::all();
             
+            Log::info("Schedule generation started", [
+                'employee_count' => $employees->count(),
+                'shift_count' => $shifts->count(),
+                'shift_groups' => $this->shiftGroups
+            ]);
+            
             if ($employees->count() < 2 || $shifts->count() < 2) {
-                Log::warning("Not enough employees or shifts to generate schedule");
+                Log::warning("Not enough employees or shifts to generate schedule", [
+                    'employees' => $employees->count(),
+                    'shifts' => $shifts->count()
+                ]);
                 return false;
+            }
+
+            if (empty($this->shiftGroups)) {
+                Log::warning("No shift groups initialized");
+                $this->createFallbackShiftGroups($shifts);
+                Log::info("Created fallback shift groups", [
+                    'groups' => $this->shiftGroups
+                ]);
             }
 
             DB::beginTransaction();
@@ -178,6 +191,10 @@ class WorkScheduleService
             $this->initializeLastShifts($employees, $startDate);
             $employeeGroups = $this->divideEmployeesIntoGroups($employees);
             $this->employeeRestDays = [];
+            
+            Log::info("Employee groups created", [
+                'groups' => $employeeGroups
+            ]);
             
             $currentDate = $startDate->copy();
             
@@ -220,14 +237,14 @@ class WorkScheduleService
      */
     private function ensureAdminShiftsForAdminsOnly(Carbon $startDate): void
     {
-        // Identifikasi shift admin berdasarkan nama
-        $adminShifts = Shift::where('name', 'like', '%admin%')->pluck('id')->toArray();
+        // Get admin shifts using the new admin column
+        $adminShifts = Shift::where('admin', true)->pluck('id')->toArray();
         
         if (empty($adminShifts)) {
             return;
         }
         
-        // Cari jadwal yang memberikan shift admin ke non-admin
+        // Find any non-admin employees assigned to admin shifts
         $wrongAssignments = WorkSchedule::whereBetween('date', [
                 $startDate->format('Y-m-d'),
                 $startDate->copy()->addDays(6)->format('Y-m-d')
@@ -240,7 +257,7 @@ class WorkScheduleService
             ->get();
         
         foreach ($wrongAssignments as $assignment) {
-            // Jika ada non-admin yang terjadwal di shift admin, ganti dengan shift lain
+            // Find an alternative non-admin shift for the employee
             $alternativeShift = $this->findAlternativeShiftForEmployee(
                 $assignment->employee_id,
                 $adminShifts,
@@ -336,8 +353,15 @@ class WorkScheduleService
         return EmployeeGroupHelper::divideEmployeesIntoGroups(
             $employees,
             $this->shiftGroups,
-            fn($shiftId) => $this->getShiftGroupId($shiftId),
-            fn() => $this->firstGroupRequiresMoreStaff()
+            fn() => $this->firstGroupRequiresMoreStaff(),
+            fn($employees, &$groups) => $this->assignNonRotatableEmployees($employees, $groups),
+            fn($groups) => $this->countEmployeesPerGroup($groups),
+            fn(&$groups, &$groupCounts, $maxGroup2) => $this->balanceFirstTwoGroups($groups, $groupCounts, $maxGroup2),
+            fn($employees, &$groups, &$groupCounts, $isTwoShiftPattern, $firstGroupHasPriority, $maxGroup2) => 
+                $this->assignRotatableEmployees($employees, $groups, $groupCounts, $isTwoShiftPattern, $firstGroupHasPriority, $maxGroup2),
+            fn(&$groups, $groupCounts, $totalEmployees) => $this->ensureNoEmptyGroups($groups, $groupCounts, $totalEmployees),
+            fn($totalEmployees, $totalGroups, $isTwoShiftPattern, $firstGroupHasPriority) => 
+                $this->calculateGroupDistribution($totalEmployees, $totalGroups, $isTwoShiftPattern, $firstGroupHasPriority)
         );
     }
 
@@ -547,8 +571,6 @@ class WorkScheduleService
                 if ($maxGroupId && $groupCounts[$maxGroupId] > 1) {
                     $employeeToMove = array_pop($groups[$maxGroupId]);
                     $groups[$groupId][] = $employeeToMove;
-                    $groupCounts[$maxGroupId]--;
-                    $groupCounts[$groupId]++;
                 }
             }
         }
@@ -840,25 +862,14 @@ class WorkScheduleService
      */
     private function isAdminShift(int $shiftId): bool
     {
-        static $adminShiftCache = [];
+        static $adminShifts = null;
         
-        if (isset($adminShiftCache[$shiftId])) {
-            return $adminShiftCache[$shiftId];
+        if ($adminShifts === null) {
+            $adminShifts = Shift::where('admin', true)->pluck('id')->toArray();
         }
         
-        $shift = Shift::find($shiftId);
-        
-        if (!$shift) {
-            return false;
-        }
-        
-        $isAdmin = stripos($shift->name, 'admin') !== false ||
-                stripos($shift->name, 'kantor') !== false ||
-                stripos($shift->name, 'office') !== false;
-                
-        $adminShiftCache[$shiftId] = $isAdmin;
-        return $isAdmin;
-        }
+        return in_array($shiftId, $adminShifts);
+    }
     
     /**
      * Memeriksa apakah karyawan adalah admin

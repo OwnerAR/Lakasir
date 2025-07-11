@@ -13,10 +13,13 @@ use Filament\Pages\Actions;
 use Filament\Resources\Pages\Page;
 use App\Traits\HasTranslatableResource;
 use Filament\Forms\Form;
+use Filament\Forms\Contracts\HasForms;
+use Filament\Forms\Concerns\InteractsWithForms;
 
-class GenerateSchedule extends Page
+class GenerateSchedule extends Page implements HasForms
 {
     use HasTranslatableResource;
+    use InteractsWithForms;
     
     public ?array $data = [];
     
@@ -41,8 +44,12 @@ class GenerateSchedule extends Page
             DatePicker::make('start_date')
                 ->label('Start Date')
                 ->required()
+                ->native(false)
+                ->format('Y-m-d')
+                ->displayFormat('d F Y')
                 ->minDate(now())
-                ->default(now()),
+                ->default(now())
+                ->columnSpan('full'),
             
             TextInput::make('weeks')
                 ->label('Weeks to Generate')
@@ -50,7 +57,7 @@ class GenerateSchedule extends Page
                 ->numeric()
                 ->minValue(1)
                 ->maxValue(12)
-                ->default(4),
+                ->default(1),
         ];
     }
     

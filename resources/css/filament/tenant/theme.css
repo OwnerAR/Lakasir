@@ -1,10 +1,7 @@
 @import '/vendor/filament/filament/resources/css/theme.css';
 @config '../../../../tailwind.config.js';
 
-.fi-sidebar {
-  @apply left-0;
-  position: fixed !important;
-}
+
 .fi-sidebar-nav {
   @apply bg-white drop-shadow-md dark:bg-gray-900;
 }
@@ -45,50 +42,19 @@
   @apply mx-0;
 }
 
-.filament-widgets-container {
-    width: 100% !important;
-    max-width: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
+/* DatePicker Styles */
+.fi-fo-date-time-picker {
+  @apply relative;
 }
 
-.filament-widgets-container .filament-tables-container {
-    width: 100% !important;
-    max-width: none !important;
+.fi-fo-date-time-picker .flatpickr-calendar {
+  @apply max-h-[320px] overflow-y-auto shadow-lg;
 }
 
-/* Widget Calendar Full Width Fix */
-.filament-widget,
-.filament-widget > .filament-section,
-.filament-widget > .filament-section > div,
-.filament-tables-container,
-.filament-tables-container table {
-    width: 100% !important;
-    max-width: none !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-    margin-left: 0 !important;
-    margin-right: 0 !important;
+.fi-fo-date-time-picker .flatpickr-months {
+  @apply sticky top-0 bg-white dark:bg-gray-900 z-10;
 }
 
-/* Fix untuk container panel */
-.filament-main-content > .filament-page > div {
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-}
-
-/* Pastikan tabel jadwal mengisi seluruh lebar */
-.schedule-calendar-wrapper {
-    width: 100% !important;
-    max-width: none !important;
-    overflow-x: hidden !important;
-}
-
-/* Override tambahan untuk Filament 3.x */
-.fi-section,
-.fi-section-content {
-    width: 100% !important;
-    max-width: none !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
+.fi-fo-date-time-picker .flatpickr-weekdays {
+  @apply sticky top-[40px] bg-white dark:bg-gray-900 z-10;
 }

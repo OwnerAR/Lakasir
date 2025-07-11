@@ -9,12 +9,18 @@ class Shift extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'start_time', 'end_time'];
+    protected $fillable = ['name', 'start_time', 'end_time', 'off', 'admin'];
+
+    protected $casts = [
+        'off' => 'boolean',
+        'admin' => 'boolean',
+    ];
     
     public function schedules()
     {
         return $this->hasMany(WorkSchedule::class);
     }
+
     public function employees()
     {
         return $this->hasMany(Employee::class);
