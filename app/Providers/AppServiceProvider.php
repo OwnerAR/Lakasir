@@ -8,6 +8,8 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Pennant\Feature;
+use App\Models\Tenants\OmniChannel\Ticket;
+use App\Observers\TicketObserver;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -26,7 +28,7 @@ class AppServiceProvider extends ServiceProvider
      *
      * @return void
      */
-    public function boot()
+    public function boot(): void
     {
         Builder::macro('filter', function (Request $request) {
             /* WIP:  <07-08-22, sheenazien8> */
@@ -64,5 +66,6 @@ class AppServiceProvider extends ServiceProvider
 
         Feature::resolveScopeUsing(fn ($driver) => null);
         Feature::discover();
+        Ticket::observe(TicketObserver::class);
     }
 }

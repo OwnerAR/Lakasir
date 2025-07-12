@@ -8,4 +8,10 @@ use Filament\Resources\Pages\EditRecord;
 class EditMessage extends EditRecord
 {
     protected static string $resource = MessageResource::class;
+    protected static ?string $navigationLabel = 'Live Chat';   
+
+    public function getTitle(): string 
+    {
+        return 'Live Chat';
+    }
 }
