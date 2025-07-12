@@ -56,6 +56,10 @@ class PayrollResource extends Resource
                     ->label(__('Period'))
                     ->required()
                     ->translateLabel(),
+                Textarea::make('note')
+                    ->label(__('Note'))
+                    ->maxLength(100)
+                    ->translateLabel(),
                 Select::make('status')
                     ->label(__('Status'))
                     ->required()

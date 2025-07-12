@@ -49,7 +49,7 @@ class WeeklyPayrollRecap extends Command
                     
                     // Kirim notifikasi WhatsApp
                     $NotificationService = $this->whatsappService;
-                    $message = "Payroll Anda telah berhasil direkap. Jumlah: Rp" . number_format($payroll->amount, 2, ',', '.');
+                    $message = "Payroll Anda telah berhasil direkap. Jumlah: Rp" . number_format($payroll->amount, 2, ',', '.')."\n\n".$payroll->note;
                     $NotificationService->sendMessage($payroll->employee->whatsapp_id, $message);
                 } else {
                     $this->error("Gagal merekap payroll untuk karyawan {$payroll->employee->name}.");

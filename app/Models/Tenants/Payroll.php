@@ -14,6 +14,7 @@ class Payroll extends Model
         'amount',
         'period',
         'status',
+        'note',
     ];
 
     public function employee()

@@ -50,6 +50,7 @@ class WeeklyAttendanceRecap extends Command
                             'amount' => round($amount, 2),
                             'period' => $startOfWeek->toDateString(),
                             'status' => 'unpaid',
+                            'note' => 'Hari kerja: ' . $workDays . ' hari',
                         ]);
                         // update attendance status
                         Attendance::where('employee_id', $employee->id)
